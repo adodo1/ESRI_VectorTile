@@ -26,6 +26,30 @@ import os, sys, requests, struct, zlib, gzip, StringIO
 #   ...
 
 
+# ESRI LODs
+# level resolution          scale
+# 00    78271.516963999995  295828763.79577750
+# 01    39135.758481999947  147914381.89788851
+# 02    19567.879241000050  73957190.948944494
+# 03    9783.9396204999503  36978595.474472001
+# 04    4891.9698102499797  18489297.737236001
+# 05    2445.9849051249898  9244648.8686180003
+# 06    1222.9924525624949  4622324.4343090001
+# 07    611.49622628124496  2311162.2171545001
+# 08    305.74811314069001  1155581.1085775001
+# 09    152.87405657027901  577790.55428849999
+# 10    76.437028285205500  288895.27714450000
+# 11    38.218514142536598  144447.63857200000
+# 12    19.109257071268299  72223.819285999998
+# 13    9.5546285356341496  36111.909642999999
+# 14    4.7773142678170748  18055.954821500000
+# 15    2.3886571339746849  9027.9774109999998
+# 16    1.1943285669873400  4513.9887054999999
+# 17    0.59716428342752503 2256.9943524999999
+# 18    0.29858214177990849 1128.4971765000000
+# 19    0.14929107082380849 564.24858800000004
+
+
 class GZipClass:
     def GzipCompress(self, raw_data):
         # 压缩
@@ -302,6 +326,46 @@ class TileDataClass:
         level, srow, scol = bundle.GetLevelRowCol()
         result = bundle.ListTiles(level, srow, scol)
         return result
+
+    def SaveToDir(self, outdir, esri=False):
+        # 保存碎瓦片到目录
+        bundlelst = self.ListBundles()
+        for bundlename in bundlelst:
+            self.SaveOneToDir(bundlename, outdir)
+
+    def SaveOneToDir(self, bundlename, outdir, esri=False):
+        # 保存某一个bundle文件里的碎瓦片
+        # bundlename 瓦片包文件
+        # outdir 输出目录
+        # esri 是否为Esri目录结构
+        tilelst = tiledata.ListTiles(bundlename)
+        for tile in tilelst:
+            #
+            level = tile['level']
+            row = tile['row']
+            col = tile['col']
+            offset = tile['offset']
+            size = tile['size']
+
+            print '>> ', level, row, col
+            #
+            mvtdata = self.ReadTile(level, row, col)
+            if (mvtdata == None or len(mvtdata) == 0): continue
+            # 保存
+            if (esri):
+                savedir = os.path.join(outdir, 'L%02d/R%08x/' % (level, row))
+                savename = 'C%08x.pbf' % col
+                if (os.path.exists(savedir) == False):
+                    os.makedirs(savedir)
+            else:
+                savedir = os.path.join(outdir, '%d/%d/' % (level, row))
+                savename = '%d.pbf' % col
+                if (os.path.exists(savedir) == False):
+                    os.makedirs(savedir)
+            savefile = open(savedir + savename, 'wb')
+            savefile.write(mvtdata)
+            savefile.flush()
+            savefile.close()
     
     def WriteTile(self, level, row, col, data):
         # 写入瓦片数据
@@ -315,6 +379,7 @@ if __name__=='__main__':
     print 'voter tiles.'
     print 'Encode: %s' %  sys.getdefaultencoding()
 
+    '''
     # 单元测试
     bundle = BundleClass('data/L14/R1b80C3300.bundle')
     tiledata = TileDataClass('data')
@@ -344,10 +409,16 @@ if __name__=='__main__':
     print len(bundlelst)
 
     # 列出某个瓦片包里有效的瓦片
-    tilelst = tiledata.ListTiles(bundlelst[18])
-    print bundlelst[18]
+    tilelst = tiledata.ListTiles(bundlelst[0])
+    print bundlelst[0]
     print len(tilelst)
     print tilelst
+    '''
+    
+    #
+    tiledata = TileDataClass('data')
+    tiledata.SaveToDir('out', False)
 
 
+    print 'OK.'
     
