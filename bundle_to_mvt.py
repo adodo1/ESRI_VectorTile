@@ -69,13 +69,23 @@ class BundleClass:
     # 瓦片文件类
     def __init__(self, fname):
         # 初始化
-        self._fname = fname
+        self._fname = fname         # bundle文件名
+        self._tilesoffset = {}      # 偏移量字典 KEY:(row, col) VALUE:(offset, size)
         pass
 
-    def GetTileMVT(self, position):
-        # 获取单张瓦片mvt
-        # position 偏移量
-        pass
+    def GetTileMVT(self, offset, size):
+        # 获取单张瓦片mvt 通过偏移量
+        # offset 偏移量
+        # size 文件大小
+        if (size == 0): return None
+        fbundle = open(self._fname, 'rb')
+        fbundle.seek(offset)
+        zdata = fbundle.read(size)
+        fbundle.close()
+        # 解压
+        cdata = StringIO.StringIO(zdata)
+        udata = gzip.GzipFile(fileobj=cdata).read()
+        return udata
 
     def CreateNew(self, startrow, startcol):
         # 创建新的瓦片存储文件
@@ -85,13 +95,40 @@ class BundleClass:
         # 插入一块新瓦片到文件末尾
         pass
 
-    def GetTilePosition(self, row, col):
-        # 计算row行col列瓦片的偏移量
-        pass
+    def GetTileOffsetSize(self, row, col):
+        # 计算row行col列瓦片数据位置和大小
+        # row 总体行号
+        # col 总体列号
 
-    def GetIndexPostion(self, row, col):
-        # 计算row行col列在索引文件bundlx的偏移量
-        pass
+        # 检查字典里有没有保存
+        if (row, col) in self._tilesoffset.keys():
+            offset, size = self._tilesoffset[(row, col)]
+            return offset, size
+
+        # 从文件中获取偏移量
+        position = self.GetIndexPosition(row, col)
+        fbundle = open(self._fname, 'rb')
+        fbundle.seek(position)
+        values = fbundle.read(8)
+        fbundle.close()
+        offset = self.HexToInt5(values[0:5])    # 偏移量
+        size = self.HexToInt3(values[5:8])      # 瓦片大小
+        
+        # 保存在字典里
+        self._tilesoffset[(row, col)] = (offset, size)
+        return offset, size
+
+    def GetIndexPosition(self, row, col):
+        # 计算row行col列在bundle文件的索引偏移量
+        # row 总体行号
+        # col 总体列号
+        row = row % 128
+        col = col % 128
+        # 跳过开始64字节 每组数据8字节
+        base_pos = 64 + col * 8 * 128
+        offset = row * 8
+        position = base_pos + offset
+        return position
 
     def HexToInt5(self, value):
         # 字节转整形
@@ -123,38 +160,13 @@ class BundleClass:
         result = struct.pack('q', value)[0:5]
         return result
 
-    def GetBundleName(self, level, row, col):
-        # 通过等级 行号 列号获取集合名字
-        # row 总体行号
-        # col 总体列号
-        # returns the name of the bundle that will hold the image
-        # if it exists given the row and column of that image
-        # round down to nearest 128
-        row = int(row / 128)
-        row = row * 128
-        col = int(col / 128)
-        col = col * 128
-        row = '%04x' % row
-        col = '%04x' % col
-        filename = 'R{}C{}'.format(row, col)
-        # 
-        dirname = 'L%02d' % int(level)
-        
-        bundlename = dirname + '/' + filename
-        return bundlename
-
-    def GetBundleRowCol(self, row, col):
-        # 获取起始的行号和列号
-        row = int(row / 128)
-        row = row * 128
-        col = int(col / 128)
-        col = col * 128
-        return row, col
-
     def GetTileXYZ(self, index):
         # 反推出瓦片XYZ
-        fname = self._fname
-        pass
+        # index 索引值范围[0, 128*128)
+        level, srow, scol = self.GetLevelRowCol()
+        col = scol + int(index / 128)
+        row = srow + index % 128
+        return level, row, col
 
     def GetLevelRowCol(self):
         # 解析文件名 例如: L12/R0680C0c80.bundle
@@ -178,8 +190,12 @@ class BundleClass:
         #
         return level, row, col
 
-    def ListTiles(self, startrow, startcol):
+    def ListTiles(self, level=0, startrow=0, startcol=0):
         # 列出瓦片包里有效的瓦片
+        # 从左上角相对瓦片(0,0)开始
+        # level 等级
+        # startrow 开始行
+        # startcol 开始列
         result = []
         fbundle = open(self._fname, 'rb')
         # 跳过头部64字节
@@ -189,28 +205,107 @@ class BundleClass:
                 # 前5字节偏移量 后3个字节文件大小
                 values = fbundle.read(8)
                 offset = self.HexToInt5(values[0:5])    # 偏移量
-                tsize = self.HexToInt3(values[5:8])     # 瓦片大小
+                size = self.HexToInt3(values[5:8])      # 瓦片大小
                 #
-                if (tsize <= 0): continue
+                if (size <= 0): continue
                 tileinfo = {
+                    'level': level,
                     'row': row,
                     'col': col,
                     'offset': offset,
-                    'tsize': tsize
+                    'size': size
                     }
                 result.append(tileinfo)
         fbundle.close()
         #
         return result
 
+
+class TileDataClass:
+    # 瓦片数据处理类
+    def __init__(self, tiledir):
+        self._bundles = {}
+        self._tiledir = tiledir
+
+    def GetBundleName(self, level, row, col):
+        # 通过等级 行号 列号获取集合名字
+        # row 总体行号
+        # col 总体列号
+        # returns the name of the bundle that will hold the image
+        # if it exists given the row and column of that image
+        # round down to nearest 128
+        row = int(row / 128)
+        row = row * 128
+        col = int(col / 128)
+        col = col * 128
+        row = '%04x' % row
+        col = '%04x' % col
+        filename = 'R{}C{}'.format(row, col)
+        # 
+        dirname = 'L%02d' % int(level)
+        #
+        bundlename = dirname + '/' + filename
+        return bundlename
+
+    def GetBundleRowCol(self, row, col):
+        # 获取起始的行号和列号
+        row = int(row / 128)
+        row = row * 128
+        col = int(col / 128)
+        col = col * 128
+        return row, col
+        
     def ReadTile(self, level, row, col):
         # 读取瓦片数据
-        pass
+        # level 等级
+        # row 总体行号
+        # col 总体列号
+        name = self.GetBundleName(level, row, col)
+        bundlename = os.path.join(self._tiledir, name + '.bundle')
+        if (os.path.exists(bundlename) == False ): return None
+
+        if bundlename not in self._bundles.keys():
+            self._bundles[bundlename] = BundleClass(bundlename)
+
+        bundle = self._bundles[bundlename]
+        # 计算瓦片数据偏移量和大小 读取瓦片数据
+        offset, size = bundle.GetTileOffsetSize(row, col)
+        mvtdata = bundle.GetTileMVT(offset, size)
+        #
+        return mvtdata
+
+    def ListBundles(self):
+        # 列出所有有效的瓦片包
+        dirs = []
+        files = []
+        # 遍历目录
+        for parent,dirnames,filenames in os.walk(self._tiledir):
+            for dirname in dirnames:
+                dirs.append(os.path.join(parent, dirname))
+            for filename in filenames:
+                files.append(os.path.join(parent, filename))
+        #
+        result = []
+        for fname in files:
+            shotname, extension = os.path.splitext(fname)
+            if (extension.lower() == '.bundle'):
+                result.append(fname)
+        return result
+
+    def ListTiles(self, bundlename):
+        # 列出某个瓦片包里所有有效瓦片
+        if (os.path.exists(bundlename) == False ): return None
+        if bundlename not in self._bundles.keys():
+            self._bundles[bundlename] = BundleClass(bundlename)
+        bundle = self._bundles[bundlename]
+
+        level, srow, scol = bundle.GetLevelRowCol()
+        result = bundle.ListTiles(level, srow, scol)
+        return result
     
     def WriteTile(self, level, row, col, data):
         # 写入瓦片数据
         pass
-
 
 
 # =======================================================================
@@ -222,21 +317,37 @@ if __name__=='__main__':
 
     # 单元测试
     bundle = BundleClass('data/L14/R1b80C3300.bundle')
+    tiledata = TileDataClass('data')
 
     # 根据瓦片等级/X/Y获得所在瓦片包名
-    #print bundle.GetBundleName(14, 0x1b9b, 0x337b)
+    print tiledata.GetBundleName(14, 0x1b9b, 0x337b)
 
     # 获取文件名和目录名
     level, row, col = bundle.GetLevelRowCol()
     print level, row, col
 
     # 列出有效瓦片
+    level = 14
     row, col = 7040, 13056
-    tilelst = bundle.ListTiles(row, col)
+    tilelst = bundle.ListTiles(level, row, col)
     print len(tilelst)
 
+    # 读取一块瓦片数据
+    level = 14
+    row, col = 7160, 13060
+    mvtdata = tiledata.ReadTile(level, row, col)
+    if mvtdata != None: print len(mvtdata)
+    else: print 'Null Tile.'
 
+    # 列出所有瓦片包
+    bundlelst = tiledata.ListBundles()
+    print len(bundlelst)
 
+    # 列出某个瓦片包里有效的瓦片
+    tilelst = tiledata.ListTiles(bundlelst[18])
+    print bundlelst[18]
+    print len(tilelst)
+    print tilelst
 
 
     
