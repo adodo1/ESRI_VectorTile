@@ -149,8 +149,8 @@ class BundleClass:
         row = row % 128
         col = col % 128
         # 跳过开始64字节 每组数据8字节
-        base_pos = 64 + col * 8 * 128
-        offset = row * 8
+        base_pos = 64 + row * 8 * 128
+        offset = col * 8
         position = base_pos + offset
         return position
 
@@ -188,8 +188,8 @@ class BundleClass:
         # 反推出瓦片XYZ
         # index 索引值范围[0, 128*128)
         level, srow, scol = self.GetLevelRowCol()
-        col = scol + int(index / 128)
-        row = srow + index % 128
+        row = srow + int(index / 128)
+        col = scol + index % 128
         return level, row, col
 
     def GetLevelRowCol(self):
@@ -224,8 +224,8 @@ class BundleClass:
         fbundle = open(self._fname, 'rb')
         # 跳过头部64字节
         fbundle.seek(64)
-        for col in range(startcol, startcol + 128):
-            for row in range(startrow, startrow + 128):
+        for row in range(startrow, startrow + 128):
+            for col in range(startcol, startcol + 128):
                 # 前5字节偏移量 后3个字节文件大小
                 values = fbundle.read(8)
                 offset = self.HexToInt5(values[0:5])    # 偏移量
@@ -419,6 +419,13 @@ if __name__=='__main__':
     tiledata = TileDataClass('data')
     tiledata.SaveToDir('out', False)
 
+    #bundle = BundleClass('data/L01/R0000C0000.bundle')
+    #level, row, col = bundle.GetLevelRowCol()
+    #print level, row, col
+    #tilelst = bundle.ListTiles(level, row, col)
+    #print tilelst
 
+    
+    
     print 'OK.'
     
