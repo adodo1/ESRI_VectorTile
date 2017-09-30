@@ -358,8 +358,8 @@ class TileDataClass:
                 if (os.path.exists(savedir) == False):
                     os.makedirs(savedir)
             else:
-                savedir = os.path.join(outdir, '%d/%d/' % (level, row))
-                savename = '%d.pbf' % col
+                savedir = os.path.join(outdir, '%d/%d/' % (level, col))
+                savename = '%d.pbf' % row
                 if (os.path.exists(savedir) == False):
                     os.makedirs(savedir)
             savefile = open(savedir + savename, 'wb')
