@@ -17,7 +17,8 @@ DOMAIN_LEN = 20037508.3427892   # web mercator
 requests.packages.urllib3.disable_warnings()
 
 proxies = {
-  "http": "https://localhost:8087"
+    #"http": "https://localhost:8087",
+    'http': 'socks5://localhost:7070'
 }
 
 
