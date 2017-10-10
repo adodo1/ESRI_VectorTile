@@ -49,7 +49,7 @@ def UncompressPbf(fname):
     zdata = f.read()
     f.close()
     #
-    if (zdata[0] == 0x1F and zdata[1] ==0x8B):
+    if (zdata[0] == chr(0x1F) and zdata[1] == chr(0x8B)):
         # 解压
         cdata = StringIO.StringIO(zdata)
         udata = gzip.GzipFile(fileobj=cdata).read()
