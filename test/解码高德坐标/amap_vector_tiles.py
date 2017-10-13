@@ -4,56 +4,49 @@ import os, sys, math
 
 
 '''
-    function l(tilecoors, xyz_tilesize, tilesize2048) {
-        var d01 = 0
-          , f01 = 0
-          , d01 = 256 * xyz_tilesize.x
-          , f01 = 256 * xyz_tilesize.y;
+    function l(tilecoors, outcoorsarr, tilesize2048) {
+        var pixelX = 0
+          , pixelY = 0
+          , pixelX = 256 * outcoorsarr.x
+          , pixelY = 256 * outcoorsarr.y;
           
-        xyz_tilesize = [];
-        for (var g01 = [], h01 = [], k01 = Math.pow(2, 2), l01 = 0, m01 = tilecoors.length; l01 < m01; l01 += 2) {
-            var n01 = (d01 + tilecoors[l01]) * tilesize2048 - 53109887 * k01
-              , p01 = (f01 + tilecoors[l01 + 1]) * tilesize2048 - 26262068 * k01
-              , q01 = h01.length;
+        outcoorsarr = [];
+        for (var outtilecoorslist = [], outcoorslist = [], k01 = Math.pow(2, 2), coorindex = 0, m01 = tilecoors.length; coorindex < m01; coorindex += 2) {
+            var mercatorX = (pixelX + tilecoors[coorindex]) * tilesize2048 - 53109887 * k01
+              , mercatorY = (pixelY + tilecoors[coorindex + 1]) * tilesize2048 - 26262068 * k01
+              , outcoorslen = outcoorslist.length;
 
-            if (0 === xyz_tilesize.length || n01 !== h01[q01 - 2] || p01 !== h01[q01 - 1])
-                1 < xyz_tilesize.length ? n01 === h01[q01 - 2] && n01 === h01[q01 - 4] ? (h01[q01 - 1] = p01,
-                xyz_tilesize[xyz_tilesize.length - 1][1] = p01,
-                g01[xyz_tilesize.length - 1][1] = tilecoors[l01 + 1]) : p01 === h01[q01 - 1] && p01 === h01[q01 - 3] ? (h01[q01 - 2] = n01,
-                xyz_tilesize[xyz_tilesize.length - 1][0] = n01,
-                g01[xyz_tilesize.length - 1][0] = tilecoors[l01]) : (h01.push(n01),
-                h01.push(p01),
-                xyz_tilesize.push([n01, p01]),
-                g01.push([tilecoors[l01], tilecoors[l01 + 1]])) : (h01.push(n01),
-                h01.push(p01),
-                xyz_tilesize.push([n01, p01]),
-                g01.push([tilecoors[l01], tilecoors[l01 + 1]]))
+            if (0 === outcoorsarr.length || mercatorX !== outcoorslist[outcoorslen - 2] || mercatorY !== outcoorslist[outcoorslen - 1])
+                1 < outcoorsarr.length ? mercatorX === outcoorslist[outcoorslen - 2] && mercatorX === outcoorslist[outcoorslen - 4] ? (outcoorslist[outcoorslen - 1] = mercatorY,
+                outcoorsarr[outcoorsarr.length - 1][1] = mercatorY,
+                outtilecoorslist[outcoorsarr.length - 1][1] = tilecoors[coorindex + 1]) : mercatorY === outcoorslist[outcoorslen - 1] && mercatorY === outcoorslist[outcoorslen - 3] ? (outcoorslist[outcoorslen - 2] = mercatorX,
+                outcoorsarr[outcoorsarr.length - 1][0] = mercatorX,
+                outtilecoorslist[outcoorsarr.length - 1][0] = tilecoors[coorindex]) : (outcoorslist.push(mercatorX),
+                outcoorslist.push(mercatorY),
+                outcoorsarr.push([mercatorX, mercatorY]),
+                outtilecoorslist.push([tilecoors[coorindex], tilecoors[coorindex + 1]])) : (outcoorslist.push(mercatorX),
+                outcoorslist.push(mercatorY),
+                outcoorsarr.push([mercatorX, mercatorY]),
+                outtilecoorslist.push([tilecoors[coorindex], tilecoors[coorindex + 1]]))
         }
-        return [h01, xyz_tilesize, g01]
+        return [outcoorslist, outcoorsarr, outtilecoorslist]
     }
 '''
 
 
 def TileCoorsToMercator(tilecoors, tileX, tileY, tileZ, size):
     # 瓦片相对坐标转墨卡托坐标
-    d01 = 256 * tileX
-    f01 = 256 * tileY
+    pixelX = 256 * tileX
+    pixelY = 256 * tileY
 
-    xyz_tilesize = []
-    g01 = []
-    h01 = []
-    k01 = math.pow(2, 2)
-    m01 = len(tilecoors)
+    result = []
+    times = math.pow(2, 2)
 
-    for l01 in range(0, m01, 2):
-        n01 = (d01 + tilecoors[l01]) * size - 53109887 * k01
-        p01 = (f01 + tilecoors[l01 + 1]) * size - 26262068 * k01
-        q01 = len(h01)
-
-        print n01, p01, q01
-
-        if (0 == len(xyz_tilesize) or n01 != h01[q01 - 2] or p01 != h01[q01 - 1]):
-            print 'aaaaaa'
+    for coorindex in range(0, len(tilecoors), 2):
+        mercatorX = (pixelX + tilecoors[coorindex]) * size - 53109887 * times
+        mercatorY = (pixelY + tilecoors[coorindex + 1]) * size - 26262068 * times
+        result.append([mercatorX, mercatorY])
+    return result
         
     
     
@@ -87,7 +80,15 @@ if __name__ == '__main__':
     # {z: 9, x: 396, y: 224, N: 2048}
     # 2048
 
-    TileCoorsToMercator(r, 396, 224, 9, 2048)
+    # [99, 88, 99, 89, 100, 89, 100, 88]
+    # {z: 10, x: 817, y: 439, N: 1024}
+    #
+    # [[1833476.0, 10123056.0], [1833476.0, 10124080.0], [1834500.0, 10124080.0], [1834500.0, 10123056.0]]
+    
+
+    r = [107, 189, 107, 190, 108, 190, 108, 189]
+    r = TileCoorsToMercator(r, 817, 439, 10, 1024)
+    print r
     
     # [-4821500, 12871472, -4821500, 12916528, -4817404, 12916528, -4815356, 12902192, -4817404, 12875568]
 

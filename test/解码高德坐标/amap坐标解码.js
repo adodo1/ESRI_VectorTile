@@ -292,43 +292,71 @@ self._wkHandlers = {};
         b.push(b.shift());
         return b
     }
-    function l(tilecoors, xyz_tilesize, tilesize2048) {
-        var d01 = 0
-          , f01 = 0
-          , d01 = 256 * xyz_tilesize.x
-          , f01 = 256 * xyz_tilesize.y;
 
-        xyz_tilesize = [];
-        for (var g01 = [], h01 = [], k01 = Math.pow(2, 2), l01 = 0, m01 = tilecoors.length; l01 < m01; l01 += 2) {
-            var n01 = (d01 + tilecoors[l01]) * tilesize2048 - 53109887 * k01
-              , p01 = (f01 + tilecoors[l01 + 1]) * tilesize2048 - 26262068 * k01
-              , q01 = h01.length;
+                // if
+                1 < b.length ?
+                    // if
+                    alert(1) ||
+                    n === h[q - 2] && n === h[q - 4] ? 
+                        (alert(2), h[q - 1] = p,
+                        b[b.length - 1][1] = p,
+                        g[b.length - 1][1] = a[l + 1]) :
+                    // else if
+                    p === h[q - 1] && p === h[q - 3] ?
+                        (alert(3), h[q - 2] = n,
+                        b[b.length - 1][0] = n,
+                        g[b.length - 1][0] = a[l]) :
+                        // else
+                        (alert(4), h.push(n),
+                        h.push(p),
+                        b.push([n, p]),
+                        g.push([a[l], a[l + 1]])) :
+                    // else
+                    (alert(5), h.push(n),
+                    h.push(p),
+                    b.push([n, p]),
+                    g.push([a[l], a[l + 1]]))
 
-            if (0 === xyz_tilesize.length || n01 !== h01[q01 - 2] || p01 !== h01[q01 - 1])
+
+
+
+
+
+    function l(tilecoors, tileinfo, tilesize2048) {
+        var pixelX = 256 * tileinfo.x
+          , pixelY = 256 * tileinfo.y;
+
+        var outcoorsarr = [];
+        for (var outtilecoorslist = [], outcoorslist = [], k01 = Math.pow(2, 2), coorindex = 0, m01 = tilecoors.length; coorindex < m01; coorindex += 2) {
+            var mercatorX = (pixelX + tilecoors[coorindex]) * tilesize2048 - 53109887 * k01
+              , mercatorY = (pixelY + tilecoors[coorindex + 1]) * tilesize2048 - 26262068 * k01
+              , outcoorslen = outcoorslist.length;
+
+            if (0 === outcoorsarr.length || mercatorX !== outcoorslist[outcoorslen - 2] || mercatorY !== outcoorslist[outcoorslen - 1])
                 // if#1
-                1 < xyz_tilesize.length ?
-                    // if#2
-                    n01 === h01[q01 - 2] && n01 === h01[q01 - 4] ?
-                        (h01[q01 - 1] = p01,
-                        xyz_tilesize[xyz_tilesize.length - 1][1] = p01,
-                        g01[xyz_tilesize.length - 1][1] = tilecoors[l01 + 1]) :
-                        // if#2else
-                        p01 === h01[q01 - 1] && p01 === h01[q01 - 3] ?
-                            (h01[q01 - 2] = n01,
-                            xyz_tilesize[xyz_tilesize.length - 1][0] = n01,
-                            g01[xyz_tilesize.length - 1][0] = tilecoors[l01]) :
-                            // else
-                            (h01.push(n01),
-                            h01.push(p01),
-                            xyz_tilesize.push([n01, p01]),
-                            g01.push([tilecoors[l01], tilecoors[l01 + 1]])) :
-
-                        (h01.push(n01),
-                        h01.push(p01),
-                        xyz_tilesize.push([n01, p01]),
-                        g01.push([tilecoors[l01], tilecoors[l01 + 1]]))
+                1 < outcoorsarr.length ?
+                    // if
+                    mercatorX === outcoorslist[outcoorslen - 2] && mercatorX === outcoorslist[outcoorslen - 4] ?
+                        (outcoorslist[outcoorslen - 1] = mercatorY,
+                        outcoorsarr[outcoorsarr.length - 1][1] = mercatorY,
+                        outtilecoorslist[outcoorsarr.length - 1][1] = tilecoors[coorindex + 1]) :
+                    // else if
+                    mercatorY === outcoorslist[outcoorslen - 1] && mercatorY === outcoorslist[outcoorslen - 3] ?
+                        (outcoorslist[outcoorslen - 2] = mercatorX,
+                        outcoorsarr[outcoorsarr.length - 1][0] = mercatorX,
+                        outtilecoorslist[outcoorsarr.length - 1][0] = tilecoors[coorindex]) :
+                        // else
+                        (outcoorslist.push(mercatorX),
+                        outcoorslist.push(mercatorY),
+                        outcoorsarr.push([mercatorX, mercatorY]),
+                        outtilecoorslist.push([tilecoors[coorindex], tilecoors[coorindex + 1]])) :
+                // else
+                (outcoorslist.push(mercatorX),
+                outcoorslist.push(mercatorY),
+                outcoorsarr.push([mercatorX, mercatorY]),
+                outtilecoorslist.push([tilecoors[coorindex], tilecoors[coorindex + 1]]))
         }
-        return [h01, xyz_tilesize, g01]
+        return [outcoorslist, outcoorsarr, outtilecoorslist]
     }
     function m(a, b, c, d, f, g) {
         for (var h = 0, k = d.length; h < k; h += 1) {
