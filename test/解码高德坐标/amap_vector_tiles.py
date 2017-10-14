@@ -24,11 +24,7 @@ def TileCoorsToMercator(tilecoors, tileX, tileY, tileZ):
         mercatorY = (pixelY + tilecoors[coorindex + 1]) * size - 26262068 * times
         result.append([mercatorX, mercatorY])
     return result
-        
     
-    
-
-
 def StrToCoors(cstr):
     # 坐标字符串转瓦片相对坐标
     result = []
@@ -40,8 +36,15 @@ def StrToCoors(cstr):
             result.append(num + index - 333)
             num = None
     return result
-                
 
+def CalTileXY(tileX, tileY):
+    # 计算高德瓦片XY
+    # 例如: http://vdata.amap.com/tiles?mapType=normal&v=2&style=4&rd=1&flds=region,building,road&t=12,65,0&lv=12
+    # 得到的实际瓦片为 12-64-1
+    x = 64 * (tileX / 64) + tileY % 64
+    y = tileX % 64 + 64 * (tileY / 64)
+    return x, y
+    
 
 if __name__ == '__main__':
     print '[==DoDo==]'
@@ -50,6 +53,8 @@ if __name__ == '__main__':
 
     cstr = '''
            '''
+
+    print CalTileXY(600,233)
 
     # 高德地图瓦片解析
     r = StrToCoors(cstr.strip())
