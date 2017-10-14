@@ -2,45 +2,22 @@
 # encoding: utf-8
 import os, sys, math 
 
-
-'''
-    function l(tilecoors, outcoorsarr, tilesize2048) {
-        var pixelX = 0
-          , pixelY = 0
-          , pixelX = 256 * outcoorsarr.x
-          , pixelY = 256 * outcoorsarr.y;
-          
-        outcoorsarr = [];
-        for (var outtilecoorslist = [], outcoorslist = [], k01 = Math.pow(2, 2), coorindex = 0, m01 = tilecoors.length; coorindex < m01; coorindex += 2) {
-            var mercatorX = (pixelX + tilecoors[coorindex]) * tilesize2048 - 53109887 * k01
-              , mercatorY = (pixelY + tilecoors[coorindex + 1]) * tilesize2048 - 26262068 * k01
-              , outcoorslen = outcoorslist.length;
-
-            if (0 === outcoorsarr.length || mercatorX !== outcoorslist[outcoorslen - 2] || mercatorY !== outcoorslist[outcoorslen - 1])
-                1 < outcoorsarr.length ? mercatorX === outcoorslist[outcoorslen - 2] && mercatorX === outcoorslist[outcoorslen - 4] ? (outcoorslist[outcoorslen - 1] = mercatorY,
-                outcoorsarr[outcoorsarr.length - 1][1] = mercatorY,
-                outtilecoorslist[outcoorsarr.length - 1][1] = tilecoors[coorindex + 1]) : mercatorY === outcoorslist[outcoorslen - 1] && mercatorY === outcoorslist[outcoorslen - 3] ? (outcoorslist[outcoorslen - 2] = mercatorX,
-                outcoorsarr[outcoorsarr.length - 1][0] = mercatorX,
-                outtilecoorslist[outcoorsarr.length - 1][0] = tilecoors[coorindex]) : (outcoorslist.push(mercatorX),
-                outcoorslist.push(mercatorY),
-                outcoorsarr.push([mercatorX, mercatorY]),
-                outtilecoorslist.push([tilecoors[coorindex], tilecoors[coorindex + 1]])) : (outcoorslist.push(mercatorX),
-                outcoorslist.push(mercatorY),
-                outcoorsarr.push([mercatorX, mercatorY]),
-                outtilecoorslist.push([tilecoors[coorindex], tilecoors[coorindex + 1]]))
-        }
-        return [outcoorslist, outcoorsarr, outtilecoorslist]
-    }
-'''
+# 新版的高德地图使用websocket获取瓦片
+# 旧版的使用rest请求
+# Host: vdata.amap.com
+# Sec-WebSocket-Version: 13
+# ws://vdata.amap.com/
 
 
-def TileCoorsToMercator(tilecoors, tileX, tileY, tileZ, size):
-    # 瓦片相对坐标转墨卡托坐标
+def TileCoorsToMercator(tilecoors, tileX, tileY, tileZ):
+    # 瓦片相对坐标转墨卡托坐标 - -; 并不是墨卡托坐标
+    # size计算方法 Math.pow(2, 20 - h)
     pixelX = 256 * tileX
     pixelY = 256 * tileY
 
     result = []
     times = math.pow(2, 2)
+    size = math.pow(2, 20 - tileZ)
 
     for coorindex in range(0, len(tilecoors), 2):
         mercatorX = (pixelX + tilecoors[coorindex]) * size - 53109887 * times
@@ -71,8 +48,11 @@ if __name__ == '__main__':
     print 'amap voter tiles.'
     print 'Encode: %s' %  sys.getdefaultencoding()
 
+    cstr = '''
+           '''
+
     # 高德地图瓦片解析
-    r = StrToCoors('RQfARQfgREfgRRfUREfD')
+    r = StrToCoors(cstr.strip())
     print r
     print len(r)
 
@@ -84,25 +64,12 @@ if __name__ == '__main__':
     # {z: 10, x: 817, y: 439, N: 1024}
     #
     # [[1833476.0, 10123056.0], [1833476.0, 10124080.0], [1834500.0, 10124080.0], [1834500.0, 10123056.0]]
-    
-
-    r = [107, 189, 107, 190, 108, 190, 108, 189]
-    r = TileCoorsToMercator(r, 817, 439, 10, 1024)
+    r = TileCoorsToMercator(r, 3292, 1762, 11)
     print r
-    
-    # [-4821500, 12871472, -4821500, 12916528, -4817404, 12916528, -4815356, 12902192, -4817404, 12875568]
 
-    #0:[-4821500, 12871472]
-    #1:[-4821500, 12916528]
-    #2:[-4817404, 12916528]
-    #3:[-4815356, 12902192]
-    #4:[-4817404, 12875568]
+    for a in r:
+        print a[0], a[1]
 
-    #0[0, 234]
-    #1[0, 256]
-    #2[2, 256]
-    #3[3, 249]
-    #4[2, 236]
 
 
 
