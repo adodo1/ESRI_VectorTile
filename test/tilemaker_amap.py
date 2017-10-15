@@ -91,6 +91,8 @@ class Spider:
         #https://a.tiles.mapbox.com/v4/mapbox.mapbox-terrain-v2,mapbox.mapbox-streets-v7/9/148/194.vector.pbf?access_token=pk.eyJ1IjoiYWRvZG8xIiwiYSI6ImNqMHN3ZGxkMTA1OHEzMm81cDFuY29vMHQifQ.XVflxoyK_WveMbKlGW5Jhg
         #self.TILES_URL = 'https://a.tiles.mapbox.com/v4/mapbox.mapbox-terrain-v2,mapbox.mapbox-streets-v7/{z}/{x}/{y}.vector.pbf?access_token=pk.eyJ1IjoiYWRvZG8xIiwiYSI6ImNqMHN3ZGxkMTA1OHEzMm81cDFuY29vMHQifQ.XVflxoyK_WveMbKlGW5Jhg'   #
         self.TILES_URL = 'http://vdata.amap.com/tiles?mapType=normal&v=2&style=5&rd=1&flds=region,building,road&t={z},{x},{y}&lv={z}'   #
+        #self.GROUP_URL = 'http://vdata.amap.com/tiles?mapType=normal&v=2&style=5&rd=1&flds=region,building,road&t={items}&lv={zoom}'   #
+        self.GROUP_URL = 'http://vdata.amap.com/tiles?mapType=normal&v=2&style=5&rd=1&flds=roadlabel,poilabel&t={items}&lv={zoom}'
         self.outpath = outpath
         self.num = 0
 
@@ -127,17 +129,18 @@ class Spider:
                 print ex
                 return False
 
-    def CalTileXY(self, tileX, tileY):
+    def GetAMAPTileXY(self, tileX, tileY, tileZ):
         # 计算高德瓦片XY
         # 例如: http://vdata.amap.com/tiles?mapType=normal&v=2&style=4&rd=1&flds=region,building,road&t=12,65,0&lv=12
         # 得到的实际瓦片为 12-64-1
-        x = 64 * (tileX / 64) + tileY % 64
-        y = tileX % 64 + 64 * (tileY / 64)
+        size = int(math.pow(2, int((tileZ + 1) / 2)))
+        x = int(size * (tileX / size) + tileY % size)
+        y = int(tileX % size + size * (tileY / size))
         return x, y
         
     def DownloadTiles(self, x, y, zoom, total):
         # download tiles
-        urlx, urly = self.CalTileXY(x, y)
+        urlx, urly = self.GetAMAPTileXY(x, y, zoom)
         #url = self.TILES_URL.format(x=x, y=y, z=zoom)
         url = self.TILES_URL.format(x=urlx, y=urly, z=zoom)
         
@@ -149,30 +152,103 @@ class Spider:
             
             if (success == False):
                 # faile
-                error = 'Get IMG {%s, %s, %s} error' % (x, y, zoom)
+                error = 'Get Tile {%s, %s, %s} error' % (x, y, zoom)
+                ShowInfo(error, 'e', True)
+            else:
+                # success
+                self.num += 1
+                if (self.num % 100 == 0):
+                    ShowInfo('Downloaded Tile: %s / %s' % (self.num, total))
+                    
+        except Exception, ex:
+            ShowInfo('Tile Err: ' + str(ex))
+
+    def DownloadGroupTiles(self, gname, items, zoom, total):
+        # 按组下载
+        # gname: 组名
+        # zoom:  等级
+        # total: 总数
+        url = self.GROUP_URL.format(items=items, zoom=zoom)
+        
+        try:
+            # save file
+            savefile = '%s/%d/%s.gz' % (self.outpath, zoom, gname)
+            success = self.GetIMG(url, savefile)
+            
+            if (success == False):
+                # faile
+                error = 'Get GROUP {%s, %s, %s} error' % (x, y, zoom)
                 ShowInfo(error, 'e', True)
             else:
                 # success
                 self.num += 1
                 if (self.num % 10 == 0):
-                    ShowInfo('Downloaded IMG: %s / %s' % (self.num, total))
+                    ShowInfo('Downloaded GROUP: %s / %s' % (self.num, total))
                     
         except Exception, ex:
-            ShowInfo('xxxxxx' + str(ex))
+            ShowInfo('GROUP Err: ' + str(ex))
 
+    def AddGroupToJobs(self, gnum, gsum, group, zoom, wp):
+        # 添加组任务到线程池
+        # gnum: 当前组号
+        # gsum: 总共有多少组
+        # group: 任务组
+        # zoom: 瓦片等级
+        # wp: 线程池
+        urlstr = ''
+        for item in group:
+            urlx, urly = self.GetAMAPTileXY(item[0], item[1], zoom)
+            if (urlstr == ''): urlstr = '%d,%d,%d' % (zoom, urlx, urly)
+            else: urlstr += ';%d,%d,%d' % (zoom, urlx, urly)
+        # 提交组任务
+        wp.add_job(self.DownloadGroupTiles, '%05d' % gnum, urlstr, zoom, gsum)
+        group = [] # 清空
 
     # =============================================================
     def Work(self, maxThreads, tiles, zoom):
         # the thread work
         self.num = 0
         wp = WorkerPool(maxThreads)                             # num of thread
+        
+        
+        # 分组批量下载 100个瓦片一组
+        total = len(tiles)
+        gsize = 100
+        gnum = 0
+        gsum = math.ceil(total / 100.0)
+        group = []
+        for i in range(0, total):
+            tile = tiles[i]
+            group.append(tile)
+            #
+            if (len(group) >= gsize):
+                # 凑够一组任务
+                gnum += 1
+                self.AddGroupToJobs(gnum, gsum, group, zoom, wp)
+                group = [] # 清空组
+                
+        # 没凑够一组的
+        if (len(group)>0):
+            gnum += 1
+            self.AddGroupToJobs(gnum, gsum, group, zoom, wp)
+            group = [] # 清空组
+
+        #
+        wp.wait_for_complete()                                  # wait for complete
+        ShowInfo('Total tiles {0}.'.format(len(tiles)))
+        
+
+        '''
+        # 单个瓦片下载
         total = len(tiles)
         for tile in tiles:
             x = tile[0]
             y = tile[1]
             wp.add_job(self.DownloadTiles, x, y, zoom, total)   # add work
         wp.wait_for_complete()                                  # wait for complete
+        
         ShowInfo('Total tiles {0}.'.format(len(tiles)))
+        '''
 
 ##########################################################################
 
@@ -374,180 +450,7 @@ class GMap:
 
 ##########################################################################
 
-class MAPMetedata:
-    # map metedata
-    def __init__(self, mappath, tasks):
-        # init
-        self.mappath = mappath  # the map path
-        self.tasks = tasks      # all tasks
 
-    def SaveTask(self):
-        # save tasks to json file
-        ftask = open(self.mappath + 'tasks.json', 'w')
-        ftask.write(json.dumps(self.tasks))
-        ftask.close()
-        ShowInfo('write tasks.json complete.')
-
-    def SaveTfw(self):
-        # save tfw file
-        for zoom in tasks:
-            # WLD -- ESRI World File
-            # A world file file is a plain ASCII text file consisting of six values separated by newlines. The format is:
-            # . pixel X size (m/px)
-            # . rotation about the Y axis (usually 0.0)
-            # . rotation about the X axis (usually 0.0)
-            # . negative pixel Y size (-m/px)
-            # . X coordinate of upper left pixel center (m)
-            # . Y coordinate of upper left pixel center (m)
-            pixX = (tasks[zoom]['mc_maxx'] - tasks[zoom]['mc_minx']) * 1.0 / tasks[zoom]['pixel_width']
-            pixY = (tasks[zoom]['mc_maxy'] - tasks[zoom]['mc_miny']) * 1.0 / tasks[zoom]['pixel_height']
-            roX = 0
-            roY = 0
-            offsetX = tasks[zoom]['mc_minx']
-            offsetY = tasks[zoom]['mc_miny']
-            
-            ftfw = open(self.mappath + 'L%02d.tfw' % zoom, 'w')
-            ftfw.write('%.12f\n' % pixX)
-            ftfw.write('%.10f\n' % roX)
-            ftfw.write('%.10f\n' % roY)
-            ftfw.write('%.12f\n' % pixY)
-            ftfw.write('%.8f\n' % offsetX)
-            ftfw.write('%.8f\n' % offsetY)
-            ftfw.write('\n')
-            ftfw.close()
-            ShowInfo('write L%02d.tfw complete.' % zoom)
-
-    def SaveConf(self):
-        # save conf.cdi conf.xml
-        # ----conf.xml
-        lodinfos = ''
-        gmap = GMap()
-        xMin = None
-        yMin = None
-        xMax = None
-        yMax = None
-        for zoom in tasks:
-            # fill lodinfo
-            if (xMin == None): xMin = tasks[zoom]['mc_minx']
-            if (yMin == None): yMin = tasks[zoom]['mc_miny']
-            if (xMax == None): xMax = tasks[zoom]['mc_maxx']
-            if (yMax == None): yMax = tasks[zoom]['mc_maxy']
-            # scale resolution
-            scale = gmap.GetMAPScale(zoom)
-            resolution = gmap.GetGroundResolution(zoom)
-            lodinfos += """
-      <LODInfo xsi:type="typens:LODInfo">
-        <LevelID>%d</LevelID>
-        <Scale>%d</Scale>
-        <Resolution>%.15f</Resolution>
-      </LODInfo>
-            """ % (zoom, scale, resolution)
-            
-        # LODInfos
-        lodinfos = """
-    <LODInfos xsi:type="typens:ArrayOfLODInfo">
-    %s
-    </LODInfos>
-        """ % lodinfos
-        # TileImageInfo
-        tileimageinfo = """
-  <TileImageInfo xsi:type="typens:TileImageInfo">
-    <CacheTileFormat>JPEG</CacheTileFormat>
-    <CompressionQuality>75</CompressionQuality>
-    <Antialiasing>false</Antialiasing>
-  </TileImageInfo>
-        """
-        # CacheStorageInfo
-        cachestorageinfo = """
-  <CacheStorageInfo xsi:type="typens:CacheStorageInfo">
-    <StorageFormat>esriMapCacheStorageModeExploded</StorageFormat>
-    <PacketSize>0</PacketSize>
-  </CacheStorageInfo>
-        """
-        # SpatialReference
-        spatialreference = """
-    <SpatialReference xsi:type="typens:ProjectedCoordinateSystem">
-      <WKT>PROJCS["WGS_1984_Web_Mercator",GEOGCS["GCS_WGS_1984_Major_Auxiliary_Sphere",DATUM["D_WGS_1984_Major_Auxiliary_Sphere",SPHEROID["WGS_1984_Major_Auxiliary_Sphere",6378137.0,0.0]],PRIMEM["Greenwich",0.0],UNIT["Degree",0.0174532925199433]],PROJECTION["Mercator"],PARAMETER["false_easting",0.0],PARAMETER["false_northing",0.0],PARAMETER["central_meridian",0.0],PARAMETER["standard_parallel_1",0.0],UNIT["Meter",1.0],AUTHORITY["ESRI",102113]]</WKT>
-    </SpatialReference>
-        """
-        # TileOrigin
-        tileorigin = """
-    <TileOrigin xsi:type="typens:PointN">
-      <X>-20037508.342787001</X>
-      <Y>20037508.342787001</Y>
-    </TileOrigin>
-        """
-        # TileCols
-        tilecols = """
-    <TileCols>256</TileCols>
-        """
-        # TileRows
-        tilerows = """
-    <TileRows>256</TileRows>
-        """
-        # DPI
-        dpi = """
-    <DPI>96</DPI>
-        """
-        # TileCacheInfo
-        tilecacheinfo = """
-  <TileCacheInfo xsi:type="typens:TileCacheInfo">
-{SpatialReference}
-{TileOrigin}
-{TileCols}
-{TileRows}
-{DPI}
-{LODInfos}
-  </TileCacheInfo>
-        """.format(SpatialReference = spatialreference,
-                   TileOrigin = tileorigin,
-                   TileCols = tilecols,
-                   TileRows = tilerows,
-                   DPI = dpi,
-                   LODInfos = lodinfos)
-        # CacheInfo
-        cacheinfo = """<?xml version="1.0" encoding="utf-8"?>
-
-<CacheInfo xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-            xmlns:xs="http://www.w3.org/2001/XMLSchema"
-            xmlns:typens="http://www.esri.com/schemas/ArcGIS/10.0"
-            xsi:type="typens:CacheInfo">
-{TileCacheInfo}
-{TileImageInfo}
-{CacheStorageInfo}
-</CacheInfo>
-        """.format(TileCacheInfo = tilecacheinfo,
-                   TileImageInfo = tileimageinfo,
-                   CacheStorageInfo = cachestorageinfo)
-
-        fxml = open(self.mappath + 'conf.xml', 'w')
-        fxml.write(cacheinfo.encode('utf8'))
-        fxml.close()
-        ShowInfo('write conf.xml complete.')
-        
-        # ----conf.cdi
-        fcdi = open(self.mappath + 'conf.cdi', 'w')
-        cditxt = """<?xml version="1.0" encoding="utf-8"?>
-
-<EnvelopeN xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-           xmlns:xs="http://www.w3.org/2001/XMLSchema"
-           xmlns:typens="http://www.esri.com/schemas/ArcGIS/10.0"
-           xsi:type="typens:EnvelopeN">
-  <XMin>%.9f</XMin>
-  <YMin>%.9f</YMin>
-  <XMax>%.9f</XMax>
-  <YMax>%.9f</YMax>
-</EnvelopeN>
-            """ % (-20037500, -20037500, 20037500, 20037500)
-        
-        fcdi.write(cditxt.encode('utf8'))
-        fcdi.close()
-        ShowInfo('write conf.cdi complete.')
-        
-
-
-
-##########################################################################
 LOG_FILE = './tiles.log'        # log file
 
 def ShowInfo(text, level='i', save=False):
@@ -614,17 +517,6 @@ if __name__ == '__main__':
     print '[==DoDo==]'
     print 'Tile Maker.'
     print 'Encode: %s' %  sys.getdefaultencoding()
-
-    # test
-    # top_lat, left_lng, bottom_lat, right_lng, zoom, buff = 0
-    #gmap = GMap()
-    #result = gmap.GetTiles(24.305860391780953, 109.43051218986511,
-    #                       24.302868336020282, 109.43383812904358,
-    #                       17, 0)
-    #print json.dumps(result)
-
-    # !!!! bundle file !!!!
-    # http://www.cnblogs.com/yuantf/p/3320876.html
     
     # init
     maxThreads = 64                         # the num of thread
@@ -634,10 +526,10 @@ if __name__ == '__main__':
 
 
     map_path = outpath + mapname + '/'
-    lay_path = map_path + 'region_building_road/'
+    #lay_path = map_path + 'region_building_road/'
+    lay_path = map_path + 'roadlabel_poilabel/'
     
     # make output dir
-    
     if (os.path.exists(lay_path)==False):
         os.makedirs(lay_path)
 
@@ -647,12 +539,6 @@ if __name__ == '__main__':
     # do work
     success = True
     try:
-        # save metedata
-        mmetedata = MAPMetedata(map_path, tasks)
-        mmetedata.SaveTask()
-        mmetedata.SaveTfw()
-        mmetedata.SaveConf()
-        
         for zoom in tasks:
             # each zoom
             minX = tasks[zoom]['tile_minx']     # the left X index

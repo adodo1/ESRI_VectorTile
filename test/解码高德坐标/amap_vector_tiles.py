@@ -23,6 +23,9 @@ def TileCoorsToMercator(tilecoors, tileX, tileY, tileZ):
         mercatorX = (pixelX + tilecoors[coorindex]) * size - 53109887 * times
         mercatorY = (pixelY + tilecoors[coorindex + 1]) * size - 26262068 * times
         result.append([mercatorX, mercatorY])
+
+        print '#%d,%d' % (tilecoors[coorindex], tilecoors[coorindex+1])
+        
     return result
     
 def StrToCoors(cstr):
@@ -53,10 +56,11 @@ if __name__ == '__main__':
     print 'Encode: %s' %  sys.getdefaultencoding()
 
     cstr = '''
+sSdE
            '''
 
     #11,600,233
-    print CalTileXY(105041,56729,17)
+    print CalTileXY(210730,112817,18)
 
     # 高德地图瓦片解析
     r = StrToCoors(cstr.strip())
@@ -75,7 +79,7 @@ if __name__ == '__main__':
     print r
 
     for a in r:
-        print a[0], a[1]
+        print '#%s,%s' % (a[0], a[1])
 
 
 
