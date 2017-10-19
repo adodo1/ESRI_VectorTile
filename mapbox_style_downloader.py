@@ -25,6 +25,24 @@ def GetRaw(url):
         return data
     except Exception, ex:
         raise ex
+
+def DownloadHtml(url, savefile):
+    # 下载HTML到文件
+    if (os.path.exists(savefile)): return
+    print savefile
+    data = GetHtml(url)
+    f = open(savefile, 'wb')
+    f.write(data)
+    f.close()
+
+def DownloadRaw(url, savefile):
+    # 下载原始数据到文件
+    if (os.path.exists(savefile)): return
+    print savefile
+    data = GetRaw(url)
+    f = open(savefile, 'wb')
+    f.write(data)
+    f.close()
     
 if __name__ == '__main__':
     #
@@ -118,8 +136,32 @@ if __name__ == '__main__':
             # 
             
             
-            
+    # 下载CSS
+    # https://api.mapbox.com/styles/v1/mapbox/streets-v9/sprite.json?access_token=pk.eyJ1IjoiYWRvZG8xIiwiYSI6ImNqMHN3ZGxkMTA1OHEzMm81cDFuY29vMHQifQ.XVflxoyK_WveMbKlGW5Jhg
+    sprites_metadatafile = '{0}sprite.json'.format(sprites_path)
+    sprites_pngfile = '{0}sprite.png'.format(sprites_path)
+    sprites_metadatafile_2x = '{0}sprite@2x.json'.format(sprites_path)
+    sprites_pngfile_2x = '{0}sprite@2x.png'.format(sprites_path)
+    sprites_metadatafile_4x = '{0}sprite@4x.json'.format(sprites_path)
+    sprites_pngfile_4x = '{0}sprite@4x.png'.format(sprites_path)
+    
+    sprites = styles_json['sprite']
 
+    # 
+    surl = 'https://api.mapbox.com/styles/v1/{0}/sprite.json?access_token={1}'.format(sprites[17:], accessToken)
+    DownloadHtml(surl, sprites_metadatafile)
+    surl = 'https://api.mapbox.com/styles/v1/{0}/sprite@2x.json?access_token={1}'.format(sprites[17:], accessToken)
+    DownloadHtml(surl, sprites_metadatafile_2x)
+    surl = 'https://api.mapbox.com/styles/v1/{0}/sprite@4x.json?access_token={1}'.format(sprites[17:], accessToken)
+    DownloadHtml(surl, sprites_metadatafile_4x)
+
+    surl = 'https://api.mapbox.com/styles/v1/{0}/sprite.png?access_token={1}'.format(sprites[17:], accessToken)
+    DownloadHtml(surl, sprites_pngfile)
+    surl = 'https://api.mapbox.com/styles/v1/{0}/sprite@2x.png?access_token={1}'.format(sprites[17:], accessToken)
+    DownloadHtml(surl, sprites_pngfile_2x)
+    surl = 'https://api.mapbox.com/styles/v1/{0}/sprite@4x.png?access_token={1}'.format(sprites[17:], accessToken)
+    DownloadHtml(surl, sprites_pngfile_4x)
+    
 
 
 
