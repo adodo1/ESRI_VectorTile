@@ -2,9 +2,7 @@
 # encoding: utf-8
 
 import os, sys, re, math, json, shapefile
-
-
-
+import zlib, gzip, StringIO
 
 class GMap:
     # GMap class
@@ -197,7 +195,7 @@ def EvalLabelTile(text):
     tilex = int(tileinfos[1])
     tiley = int(tileinfos[2])
     lname = tileinfos[3]
-    print tileinfo
+    #print tileinfo
     # 
     features = []
     for i in range(1, len(data)):
@@ -301,29 +299,9 @@ def EvalPoilabels(data):
     return labels
 
 
-
-if __name__=='__main__':
-    print '[==DoDo==]'
-    print 'amap labels.'
-    print 'Encode: %s' %  sys.getdefaultencoding()
-
-    # 解析高德地图的标注数据
-    f = open('01015.json', 'rb')
-    text = f.read()
-    f.close()
-
+def TileToSHP(text, editor):
+    # 把瓦片数据追加到SHP数据里
     gmap = GMap()
-    writer = shapefile.Writer(shapefile.POINT)
-    writer.field('label', 'C', 80)
-    writer.field('angle', 'N', decimal=4)
-    writer.field('icon', 'N', decimal=4)
-    writer.field('size', 'N', decimal=4)
-    writer.field('fontcolor', 'C', 10)
-    writer.field('backcolor', 'C', 10)
-    writer.field('uid', 'C', 12)
-    writer.field('code', 'C', 20)
-    
-
     infos = text.split('|')
     for info in infos:
         if (info.startswith('[') == False): continue
@@ -352,10 +330,73 @@ if __name__=='__main__':
             pixelY = tileY * 256 + pixy
             lat, lng = gmap.FromPixelToCoordinate(pixelX, pixelY, tileZ)
             # 写数据到SHP文件
-            writer.point(lng, lat)
-            writer.record(label, angle, icon, size,
+            editor.record(label, angle, icon, size,
                           fontcolor, backcolor, uid, code)
+            editor.point(lng, lat, 0, 0)
+            
+
+
+if __name__=='__main__':
+    print '[==DoDo==]'
+    print 'amap labels.'
+    print 'Encode: %s' %  sys.getdefaultencoding()
+    # 解析高德地图的标注数据
+
+
+
+    #writer = shapefile.Writer(shapefile.POINT)
+    #writer.field('label', 'C', 80)
+    #writer.save('labels')
+    #editor = shapefile.Editor('labels')
+    #editor.record('text')
+    #editor.point(1,0,0,0)
+    #editor.save('labels')
+
+    print 'scan gz files'
+    datadir = './out/AMAP/roadlabel_poilabel/18'
+    dirs = []
+    files = []
+    # 遍历目录
+    for parent,dirnames,filenames in os.walk(datadir):
+        for dirname in dirnames:
+            dirs.append(os.path.join(parent, dirname))
+        for filename in filenames:
+            if (filename.lower().endswith('.gz') == False): continue
+            files.append(os.path.join(parent, filename))
+
+    if (os.path.exists('labels18.shp') == False):
+        # 创建一个SHP文件
+        writer = shapefile.Writer(shapefile.POINT)
+        writer.field('label', 'C', 80)
+        writer.field('angle', 'N', decimal=4)
+        writer.field('icon', 'N', decimal=4)
+        writer.field('size', 'N', decimal=4)
+        writer.field('fontcolor', 'C', 10)
+        writer.field('backcolor', 'C', 10)
+        writer.field('uid', 'C', 12)
+        writer.field('code', 'C', 20)
+        writer.save('labels18')
+        print 'Create SHP finish.'
+
+    #
+    editor = shapefile.Editor('labels18')
+
+    num = 0
+    count = len(files)
+    for fz in files:
+        #
+        num += 1
+        print '[%04d/%d]: %s' % (num, count, fz)
+        f = open(fz, 'rb')
+        zdata = f.read()
+        f.close()
+        cdata = StringIO.StringIO(zdata)
+        udata = gzip.GzipFile(fileobj=cdata).read()
+        # 保存数据
+        TileToSHP(udata, editor)
+        
 
     # 保存
-    writer.save('labels')
+    editor.save('labels18')
+    
             
