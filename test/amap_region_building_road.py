@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # encoding: utf-8
 
-import os, sys, re, math, json, shapefile
+import os, sys, re, math, json, shapefile, StringIO, gzip
 
 
 
@@ -193,7 +193,8 @@ def EvalRoad(data):
     insize = int(styles[0])
     incolor = styles[1]
     inlinear = styles[2]
-    
+
+    if (styles[3] == ''): styles[3] = 0
     outsize = int(styles[3])
     outcolor = styles[4]
     outlinear = styles[5]
@@ -244,15 +245,15 @@ def EvalRegion(data):
 def EvalBuilding(data):
     # 解析建筑数据
     size = len(data)
-    if (size != 5): raise Exception('unknow building data: %s' % data)
+    # building 长度是4/5/6 数据太不规范了
+    if (size != 4 and size != 5 and size != 6): raise Exception('unknow building data: %s' % data)
     geos = data[0]          # 图形
     style = data[1]         # 样式
     code = data[3]          # 编码
-    #
+    # ccf4f3ec &1 &4ccbcac0 &ccd9d8ce &cccbcac0 &150&99
     styles = style.split('&')
     incolor = styles[0]
-    if (styles[1] != ''):
-        raise Exception('{0} style!!!!!!'.format(style))
+    outcolor = styles[2]
     
     #
     parts = []
@@ -278,17 +279,86 @@ def EvalDataTile(text):
     tilex = int(tileinfos[1])
     tiley = int(tileinfos[2])
     lname = tileinfos[3]
-    print tileinfo, lname
 
     # 
     features = []
     for i in range(1, len(data)):
         item = data[i]
-        if (lname == 'road'): tdata = EvalRoad(item)
-        elif (lname == 'region'): tdata = EvalRegion(item)
-        elif (lname == 'building'): tdata = EvalBuilding(item)
+        if (lname == 'road'): rdata = EvalRoad(item)
+        elif (lname == 'region'): rdata = EvalRegion(item)
+        elif (lname == 'building'): rdata = EvalBuilding(item)
         else: raise Exception('{0} is not in road.'.format(lname))
+        # 添加到要素集合
+        features.append(rdata)
+    # 
+    return {'tilex': tilex,
+            'tiley': tiley,
+            'tilez': tilez,
+            'lname': lname,
+            'features': features
+           }
 
+
+def EvalParts(tileX, tileY, tileZ, parts):
+    # 解析坐标串
+    gmap = GMap()
+    result = []
+    for part in parts:
+        one = []
+        for i in range(0, len(part), 2):
+            pixx = part[i]
+            pixy = part[i+1]
+            #
+            pixelX = tileX * 256 + pixx
+            pixelY = tileY * 256 + pixy
+            lat, lng = gmap.FromPixelToCoordinate(pixelX, pixelY, tileZ)
+            one.append([lng, lat])
+        result.append(one)
+    return result
+    
+
+def TileToSHP(text, line_editor, polygon_editor):
+    # 把瓦片数据追加到SHP数据里
+    infos = text.split('|')
+    for info in infos:
+        if (info.startswith('[') == False): continue
+        tile = EvalDataTile(info)
+        # 瓦片像素矫正 并往SHP数据里写
+        tileX = tile['tilex']
+        tileY = tile['tiley']
+        tileZ = tile['tilez']
+        lname = tile['lname']
+        features = tile['features']
+        #
+        
+        if (lname == 'road'):
+            # 线图层
+            for feature in features:
+                #
+                insize = feature['insize']
+                incolor = feature['incolor'].encode('gbk')
+                inlinear = feature['inlinear'].encode('gbk')
+                outsize = feature['outsize']
+                outcolor = feature['outcolor'].encode('gbk')
+                outlinear = feature['outlinear'].encode('gbk')
+                code = feature['code'].encode('gbk')
+                #
+                parts = EvalParts(tileX, tileY, tileZ, feature['parts'])
+                # 写数据到SHP文件
+                line_editor.record(insize, incolor, inlinear,
+                              outsize, outcolor, outlinear, code)
+                line_editor.line(parts=parts)
+        else:
+            # 面图层
+            for feature in features:
+                #
+                incolor = feature['incolor'].encode('gbk')
+                code = str(feature['code']).encode('gbk')
+                #
+                parts = EvalParts(tileX, tileY, tileZ, feature['parts'])
+                # 写数据到SHP文件
+                polygon_editor.record(incolor, code)
+                polygon_editor.poly(parts=parts)
 
 
 if __name__=='__main__':
@@ -302,7 +372,76 @@ if __name__=='__main__':
     f.close()
 
 
-    infos = text.split('|')
-    for info in infos:
-        if (info.startswith('[') == False): continue
-        EvalDataTile(info)
+    if (os.path.exists('line18.shp') == False):
+        # 创建一个线SHP文件
+        writer = shapefile.Writer(shapefile.POLYLINE)
+        writer.field('insize', 'N', decimal=4)
+        writer.field('incolor', 'C', 10)
+        writer.field('inlinear', 'C', 12)
+        writer.field('outsize', 'N', decimal=4)
+        writer.field('outcolor', 'C', 10)
+        writer.field('outlinear', 'C', 12)
+        writer.field('code', 'C', 20)
+        writer.save('line18')
+        print 'Create line SHP finish.'
+
+    if (os.path.exists('polygon18.shp') == False):
+        # 创建一个面SHP文件
+        writer = shapefile.Writer(shapefile.POLYGON)
+        writer.field('incolor', 'C', 10)
+        writer.field('code', 'C', 20)
+        writer.save('polygon18')
+        print 'Create polygon SHP finish.'
+
+    line_editor = shapefile.Editor('line18')
+    polygon_editor = shapefile.Editor('polygon18')
+
+
+    print 'scan gz files'
+    datadir = './out/AMAP/region_building_road/18'
+    dirs = []
+    files = []
+    # 遍历目录
+    for parent,dirnames,filenames in os.walk(datadir):
+        for dirname in dirnames:
+            dirs.append(os.path.join(parent, dirname))
+        for filename in filenames:
+            if (filename.lower().endswith('.gz') == False): continue
+            files.append(os.path.join(parent, filename))
+
+
+    #files = ['./out/AMAP/region_building_road/18/16342.gz']
+
+    num = 0
+    count = len(files)
+    for fz in files:
+        #
+        num += 1
+        print '[%04d/%d]: %s' % (num, count, fz)
+        f = open(fz, 'rb')
+        zdata = f.read()
+        f.close()
+        cdata = StringIO.StringIO(zdata)
+        udata = gzip.GzipFile(fileobj=cdata).read()
+        
+        TileToSHP(udata, line_editor, polygon_editor)
+
+
+    # 保存
+    line_editor.save('line18')
+    polygon_editor.save('polygon18')
+
+
+
+
+
+
+
+
+
+
+
+
+
+    
+
