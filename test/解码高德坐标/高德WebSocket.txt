@@ -1,0 +1,311 @@
+高德瓦片以后会采用websocket
+
+位置：
+var b = new WebSocket(this.yV);
+b.onmessage = V.g.bind(this.JT, this);
+"ws://vdata.amap.com"
+
+
+如果websocket断开过就不会重连了
+
+
+
+// 编码或解码
+    a0: function(a) {
+        "encode" === a.Mc ? this.yG(a.yb) : "decode" === a.Mc && this.oT(a.yb)
+    },
+
+
+
+// 解码decode
+    oT: function(a) {
+        if ("ack" === a.type)
+            switch (a.command) {
+            case "tiles":
+                this.w("ack", a);
+                break;
+            case "retain":
+                this.Sb = "connected";
+                this.flush();
+                break;
+            case "close":
+                this.hr()
+            }
+
+
+// 编码encode
+    yG: function(a, b) {
+        if ("unsupport" === this.Sb)
+            return !1;
+        "connected" === this.Sb ? this.FH(a) : ("closed" === this.Sb && this.uX(),
+        this.cj.push({
+            data: a,
+            wr: b
+        }));
+        this.count += 1
+    },
+
+
+
+// this.Sh.ack[0].Me.Dr
+// this.So && (clearTimeout(this.So),
+
+
+// 这个是Sh
+    Gw: function(a, b) {
+        this.Qd = {};
+        this.Qd.ao = V.g.Bb(this.Qd);
+        b.ub || (b.ub = new V.DO);
+        this.ub = b.ub;
+        this.ub.e("tiles", this.LL, this);
+        this.ub.e("ack", this.KL, this);
+        this.ub.e("disable", this.IL, this)
+    },
+
+
+
+// 搜索关键字
+g = this.ub.send(f);        << 发送请求
+
+// 编码解码核心代码
+//编码核心代码
+        V.Dk.Cq({
+            Mc: "encode",
+            yb: a,
+            ao: this.Yh
+        }, function(a, f) {
+            a || c.yG(f.yb, b)
+        });
+
+
+// 解码核心代码
+        V.Dk.Ct([a.data]);
+        V.Dk.If({
+            ao: b.Yh,
+            Mc: "decode",
+            yb: a.data
+        }, function(a, d) {
+            a || b.a0(d)
+        })
+
+// ArrayBuffer解码
+    k.If = function(a) {
+        var b = new DataView(a)
+          , b = new f(b)
+          , c = b.parse();             << 最最关键的解码
+        if (b.offset !== a.byteLength)
+            throw Error(a.byteLength - b.offset + " trailing bytes");
+        return c
+    }
+
+
+
+//部分解码过程
+    f.prototype.parse = function() {
+        var a = this.view.getUint8(this.offset);
+        if (160 === (a & 224))
+            return this.offset++,
+            this.Cv(a & 31);
+        if (128 === (a & 240))
+            return this.offset++,
+            this.map(a & 15);
+        if (144 === (a & 240))
+            return this.offset++,
+            this.hz(a & 15);
+        if (0 === (a & 128))
+            return this.offset++,
+            a;
+        if (224 === (a & 224))
+            return a = this.view.getInt8(this.offset),
+            this.offset++,
+            a;
+        if (212 === a && 0 === this.view.getUint8(this.offset + 1))
+            this.offset += 3;
+        else {
+            switch (a) {
+            case 217:
+                return a = this.view.getUint8(this.offset + 1),
+                this.offset += 2,
+                this.Cv(a);
+            case 218:
+                return a = this.view.getUint16(this.offset + 1),
+                this.offset += 3,
+                this.Cv(a);
+            case 219:
+                return a = this.view.getUint32(this.offset + 1),
+                this.offset += 5,
+                this.Cv(a);
+            case 196:
+                return a = this.view.getUint8(this.offset + 1),
+                this.offset += 2,
+                this.qz(a);
+            case 197:
+                return a = this.view.getUint16(this.offset + 1),
+                this.offset += 3,
+                this.qz(a);
+            case 198:
+                return a = this.view.getUint32(this.offset + 1),
+                this.offset += 5,
+                this.qz(a);
+            case 192:
+                return this.offset++,
+                null;
+            case 194:
+                return this.offset++,
+                !1;
+            case 195:
+                return this.offset++,
+                !0;
+            case 204:
+                return a = this.view.getUint8(this.offset + 1),
+                this.offset += 2,
+                a;
+            case 205:
+                return a = this.view.getUint16(this.offset + 1),
+                this.offset += 3,
+                a;
+            case 206:
+                return a = this.view.getUint32(this.offset + 1),
+                this.offset += 5,
+                a;
+            case 207:
+                var a = this.view.getUint32(this.offset + 1)
+                  , b = this.view.getUint32(this.offset + 5);
+                this.offset += 9;
+                return 4294967296 * a + b;
+            case 208:
+                return a = this.view.getInt8(this.offset + 1),
+                this.offset += 2,
+                a;
+            case 209:
+                return a = this.view.getInt16(this.offset + 1),
+                this.offset += 3,
+                a;
+            case 210:
+                return a = this.view.getInt32(this.offset + 1),
+                this.offset += 5,
+                a;
+            case 211:
+                return a = this.view.getInt32(this.offset + 1),
+                b = this.view.getUint32(this.offset + 5),
+                this.offset += 9,
+                4294967296 * a + b;
+            case 222:
+                return a = this.view.getUint16(this.offset + 1),
+                this.offset += 3,
+                this.map(a);
+            case 223:
+                return a = this.view.getUint32(this.offset + 1),
+                this.offset += 5,
+                this.map(a);
+            case 220:
+                return a = this.view.getUint16(this.offset + 1),
+                this.offset += 3,
+                this.hz(a);
+            case 221:
+                return a = this.view.getUint32(this.offset + 1),
+                this.offset += 5,
+                this.hz(a);
+            case 202:
+                return a = this.view.getFloat32(this.offset + 1),
+                this.offset += 5,
+                a;
+            case 203:
+                return a = this.view.getFloat64(this.offset + 1),
+                this.offset += 9,
+                a
+            }
+            throw Error("Unknown type 0x" + a.toString(16));
+        }
+    }
+
+
+    f.prototype.map = function(a) {
+        for (var b = {}, c = 0; c < a; c++) {
+            var d = this.parse();
+            b[d] = this.parse()
+        }
+        return b
+    }
+
+
+
+    function c(a, b, c) {
+        var d = ""
+          , f = b;
+        for (b += c; f < b; f++)
+            if (c = a.getUint8(f),
+            0 === (c & 128))
+                d += String.fromCharCode(c);
+            else if (192 === (c & 224))
+                d += String.fromCharCode((c & 15) << 6 | a.getUint8(++f) & 63);
+            else if (224 === (c & 240))
+                d += String.fromCharCode((c & 15) << 12 | (a.getUint8(++f) & 63) << 6 | (a.getUint8(++f) & 63) << 0);
+            else if (240 === (c & 248))
+                d += String.fromCharCode((c & 7) << 18 | (a.getUint8(++f) & 63) << 12 | (a.getUint8(++f) & 63) << 6 | (a.getUint8(++f) & 63) << 0);
+            else
+                throw Error("Invalid byte " + c.toString(16));
+        return d
+    }
+
+
+// 解码字符串
+this.Cv(a & 31);
+
+// 解析二进制的入口或者类
+function _prep_h4() {
+    function a(b, c, d) {
+        for (var f = 0, g = d.length; f < g; f++) {
+            var h = d.charCodeAt(f);
+            if (128 > h)
+                b.setUint8(c++, h >>> 0 & 127 | 0);
+            else if (2048 > h)
+                b.setUint8(c++, h >>> 6 & 31 | 192),
+                b.setUint8(c++, h >>> 0 & 63 | 128);
+            else if (65536 > h)
+                b.setUint8(c++, h >>> 12 & 15 | 224),
+                b.setUint8(c++, h >>> 6 & 63 | 128),
+                b.setUint8(c++, h >>> 0 & 63 | 128);
+            else if (1114112 > h)
+                b.setUint8(c++, h >>> 18 & 7 | 240),
+                b.setUint8(c++, h >>> 12 & 63 | 128),
+                b.setUint8(c++, h >>> 6 & 63 | 128),
+                b.setUint8(c++, h >>> 0 & 63 | 128);
+            else
+                throw Error("bad codepoint " + h);
+        }
+    }
+
+
+// 解析完成在这里下断点
+if (b.offset !== a.byteLength)
+
+// 如果没猜错这是加密函数
+    k.Cq = function(a) {
+        var b = new ArrayBuffer(h(a))
+          , c = new DataView(b);
+        g(a, c, 0);
+        return b
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
