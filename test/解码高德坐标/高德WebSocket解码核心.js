@@ -1,3 +1,6 @@
+// 高德矢量瓦片 amap vector tile 的 websocket 解析暂停
+// 一个人解析实在无趣 如有志同道合的朋友可以加QQ 34⑦5020⑦⑦
+// 或给我发email adodo1#126.com
 self._wkHandlers = {};
 (function d(a) {
     function b(c, d) {
@@ -490,6 +493,8 @@ function _prep_h4() {
         var b = new DataView(a)
           , b = new f(b)
           , c = b.parse();
+        // 解析的核心就是上面一句了
+        // 要是有大佬看上这个项目愿意打赏我会更有动力去反编译出来 ;)
         if (b.offset !== a.byteLength)
             throw Error(a.byteLength - b.offset + " trailing bytes");
         return c

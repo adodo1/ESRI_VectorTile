@@ -1,3 +1,8 @@
+// 高德矢量瓦片 amap vector tile 的 websocket 解析暂停
+// 一个人解析实在无趣 如有志同道合的朋友可以加QQ 34⑦5020⑦⑦
+// 或给我发email adodo1#126.com
+
+
 高德瓦片以后会采用websocket
 
 位置：
