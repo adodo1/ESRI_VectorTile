@@ -238,6 +238,8 @@ def EvalRoadWaterlabels(data):
     size = int(styles[1])
     fontcolor = styles[2]
     backcolor = styles[3]
+    
+    
     uid = ''
     labels = []
     for geo in geos:
@@ -256,6 +258,7 @@ def EvalRoadWaterlabels(data):
             'size': size,
             'fontcolor': fontcolor,
             'backcolor': backcolor,
+            'icontype': '',
             'uid': uid,
             'code': code
                 }
@@ -264,6 +267,7 @@ def EvalRoadWaterlabels(data):
 
 def EvalPoilabels(data):
     # 解析POI标记
+    # 155&13&ff4d4e51&ffffffff&&0
     size = len(data)
     if (size != 5): raise Exception('unknow poi data: %s' % data)
     geos = data[0]
@@ -275,6 +279,8 @@ def EvalPoilabels(data):
     size = int(styles[1])
     fontcolor = styles[2]
     backcolor = styles[3]
+    icontype = int(styles[5])
+    
     labels = []
     for geo in geos:
         label = geo[0]
@@ -292,6 +298,7 @@ def EvalPoilabels(data):
             'size': size,
             'fontcolor': fontcolor,
             'backcolor': backcolor,
+            'icontype': icontype,
             'uid': uid,
             'code': code
                 }
@@ -323,6 +330,7 @@ def TileToSHP(text, editor):
             size = feature['size']
             fontcolor = feature['fontcolor'].encode('gbk')
             backcolor = feature['backcolor'].encode('gbk')
+            icontype = feature['icontype']
             uid = feature['uid'].encode('gbk')
             code = feature['code'].encode('gbk')
             # 计算经纬度坐标
@@ -331,7 +339,7 @@ def TileToSHP(text, editor):
             lat, lng = gmap.FromPixelToCoordinate(pixelX, pixelY, tileZ)
             # 写数据到SHP文件
             editor.record(label, angle, icon, size,
-                          fontcolor, backcolor, uid, code)
+                          fontcolor, backcolor, icontype, uid, code)
             editor.point(lng, lat, 0, 0)
             
 
@@ -373,6 +381,7 @@ if __name__=='__main__':
         writer.field('size', 'N', decimal=4)
         writer.field('fontcolor', 'C', 10)
         writer.field('backcolor', 'C', 10)
+        wirter.field('icontype', decimal=4)
         writer.field('uid', 'C', 12)
         writer.field('code', 'C', 20)
         writer.save('labels18')
