@@ -7,6 +7,7 @@ import os, sys, json, time, math, sqlite3
 def GetUids(data):
     # 获取所有的uid
     uids = []
+    if (int(data['status'])!=1): return uids
     for poi in data['pois']:
         uid = poi['id']
         uids.append(uid)
