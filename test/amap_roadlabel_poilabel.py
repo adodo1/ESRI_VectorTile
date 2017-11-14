@@ -381,7 +381,7 @@ if __name__=='__main__':
         writer.field('size', 'N', decimal=4)
         writer.field('fontcolor', 'C', 10)
         writer.field('backcolor', 'C', 10)
-        wirter.field('icontype', decimal=4)
+        writer.field('icontype', decimal=4)
         writer.field('uid', 'C', 12)
         writer.field('code', 'C', 20)
         writer.save('labels18')
