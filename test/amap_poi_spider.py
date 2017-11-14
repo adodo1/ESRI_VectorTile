@@ -139,11 +139,21 @@ class Spider:
         # 放入任务列表中
         mutex.acquire()
         for n in range(0, int(math.ceil(total // offset))):
-            params['offset'] = offset
-            params['page'] = n + 1
-            params['extensions'] = 'all'
+            #params['offset'] = offset
+            #params['page'] = n + 1
+            #params['extensions'] = 'all'
+            task = {
+                'keywords': params['keywords'],
+                'types': params['types'],
+                'city': params['city'],
+                'children': params['city'],
+                'offset': offset,
+                'page': n+1,
+                'extensions': 'all'
+            }
+            
             # 加入列表
-            tasks.append(params)
+            tasks.append(task)
         mutex.release()
 
     def TaskThread(self, params):
@@ -257,19 +267,21 @@ if __name__=='__main__':
             'offset': 1,
             'page': 1,
             'extensions': 'base'
-        } 
+        }
         wp.add_job(spider.AddTasks, params, tasks)
-        break
     wp.wait_for_complete()
     # 保存任务列表
-    
-    
+    f = open('tasks.json', 'w')
+    f.write(json.dumps(tasks))
+    f.close()
+
     # 开始任务
     tasks_count = len(tasks)
     print 'task count:', tasks_count
     wp = WorkerPool(MAX_THREADS)
-    for task in tasks:
-        wp.add_job(spider.TaskThread, task)
+    for n in range(0, tasks_count):
+        params = tasks[n]
+        wp.add_job(spider.TaskThread, params)
     #
     wp.wait_for_complete()
 
