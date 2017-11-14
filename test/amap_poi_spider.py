@@ -1,12 +1,18 @@
 #!/usr/bin/env python
 # encoding: utf-8
 
-import os, sys, json, requests
+import os, sys, json, requests, time, logging, socket, math, sqlite3
 import threading, Queue
 from threading import Thread
 
 
-mutex = threading.Lock()        # thread lock !
+mutex = threading.Lock()                                    # thread lock !
+requests.packages.urllib3.disable_warnings()                # 
+logging.getLogger("requests").setLevel(logging.WARNING)     #
+logging.getLogger("urllib3").setLevel(logging.WARNING)      #
+
+socket.setdefaulttimeout(15)    # 超时时间15秒
+MAX_THREADS = 16                # 最大线程数
 
 
 ##########################################################################
@@ -66,78 +72,213 @@ class WorkerPool:
 ##########################################################################
 ##########################################################################
 ##########################################################################
-    
 
-def test(num):
-    url = 'http://lbs.amap.com/dev/api?keywords=银行&types=160000&city=柳州&children=1&offset=20&page={0}&extensions=all'.format(num)
-    headers = {
-        #'Accept': 'application/json, text/javascript, */*; q=0.01',
-        #'Origin': 'http://lbs.amap.com',
-        #'Referer': 'http://lbs.amap.com/api/webservice/guide/api/search/',
-        'X-Requested-With': 'XMLHttpRequest',
-        #'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-        #'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/61.0.3163.100 Safari/537.36',
-        #'Accept-Encoding': 'gzip, deflate',
-        #'Accept-Language': 'zh-CN,zh;q=0.8',
-        #'Cookie': cookie
-    }
-
-    data = {
-        'type': 'place/text',
-        'version': 'v3'
-    }
+class Spider:
+    # 高德POI爬虫
+    def __init__(self, conn):
+        # conn 数据库连接
+        self.POI_URL = 'http://lbs.amap.com/dev/api'    # 获取POI列表
+        self._conn = conn           # 数据库连接
 
 
-    r = requests.post(url, headers=headers, data=data)
-    data = json.loads(r.content)
-    mutex.acquire()
-    print num, data['count'], data['info'], data['pois'][0]['name']
-    mutex.release()
+    def GetData(self, params):
+        # 获取数据
+        # http://lbs.amap.com/dev/api?keywords=银行&types=160000&city=柳州&children=1&offset=20&page=0&extensions=all
+        headers = {
+            'X-Requested-With': 'XMLHttpRequest',
+            #'Accept': 'application/json, text/javascript, */*; q=0.01',
+            #'Origin': 'http://lbs.amap.com',
+            #'Referer': 'http://lbs.amap.com/api/webservice/guide/api/search/',
+            #'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+            #'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/61.0.3163.100 Safari/537.36',
+            #'Accept-Encoding': 'gzip, deflate',
+            #'Accept-Language': 'zh-CN,zh;q=0.8',
+            #'Cookie': cookie
+        }
+        data = {
+            'type': 'place/text',
+            'version': 'v3'
+        }
+        try:
+            r = requests.post(self.POI_URL, params=params, headers=headers, data=data)
+            data = json.loads(r.content)
+            if (data.has_key('code')):
+                logging.error('get data err: %s' % params)
+                return {'status': '0'}
+            else: return data
+        except Exception, ex:
+            raise ex
+        
+    def GetJson(self, params):
+        # 获取数据尝试3次
+        try:
+            return self.GetData(params)
+        except:
+            try:
+                return self.GetData(params)
+            except:
+                try:
+                    return self.GetData(params)
+                except Exception, ex:
+                    logging.error('%s' % s)
+                    return None
+
+    def GetTotal(self, params):
+        # 获得结果总数
+        data = self.GetJson(params)
+        if (int(data['status']) != 1): return 0
+        else: return int(data['count'])
+
+    def AddTasks(self, params, tasks):
+        # 添加任务到全局的任务列表
+        # 查询总数
+        offset = 20
+        total = self.GetTotal(params)
+        logging.info('types: %s  total: %d' % (params['types'], total))
+        if (total == 0): return
+        # 放入任务列表中
+        mutex.acquire()
+        for n in range(0, int(math.ceil(total // offset))):
+            params['offset'] = offset
+            params['page'] = n + 1
+            params['extensions'] = 'all'
+            # 加入列表
+            tasks.append(params)
+        mutex.release()
+
+    def TaskThread(self, params):
+        # 任务线程
+        conn = self._conn
+
+        # 查询数据库里是否有记录
+        total = 0
+        data = self.GetJson(params)
+        if (int(data['status']) != 1): total = 0
+        else: total = int(data['count'])
+
+        
+        mutex.acquire()
+        
+        global success_num
+        global tasks_count
+        success_num += 1
+        logging.info('task [%d/%d]: CODE: %s - PAGE: %d' % (success_num, tasks_count, params['types'], params['page']))
+        if (data != None):
+            # 插入记录到数据库
+            args = (params['keywords'],
+                    params['types'],
+                    params['city'],
+                    params['offset'],
+                    params['page'],
+                    total,
+                    json.dumps(data),
+                    int(time.time()))
+            
+            # 插入记录
+            cursor = conn.cursor()
+            cursor.execute('insert into POIDATA values(?,?,?,?,?,?,?,?)', args)
+            if (success_num % 1000 == 0):
+                conn.commit()
+            
+        mutex.release()
+
+def InitLOG(fname):
+    # 初始化日志
+    # CRITICAL > ERROR > WARNING > INFO > DEBUG > NOTSET
+    logging.basicConfig(level=logging.INFO,
+                format='%(asctime)s %(filename)s[line:%(lineno)d] %(levelname)s %(message)s',
+                datefmt='%a, %d %b %Y %H:%M:%S',
+                filename=fname,
+                filemode='a')
+
+    console = logging.StreamHandler()
+    console.setLevel(logging.INFO)
+    formatter = logging.Formatter('%(asctime)s: [%(levelname)s] %(message)s', '%H:%M:%S')
+    console.setFormatter(formatter)
+    logging.getLogger('').addHandler(console)
+
+def InitDB(conn):
+    # 初始化数据库
+    cu = conn.cursor()
+
+    # 创建POIDATA表
+    cu.execute(
+        """create table if not exists POIDATA(
+               keywords varchar(20),    -- 关键字
+               types varchar(20),       -- 分类ID
+               city varchar(20),        -- 城市ID
+               
+               offset int,              -- 每页数量
+               page int,                -- 页数
+               total int,               -- 结果总数
+               context text,            -- json内容
+               time number)             -- 时间戳
+        """)
+
+success_num = 0
+tasks_count = 0
 
 if __name__=='__main__':
     print '[==DoDo==]'
     print 'get amap pois.'
     print 'Encode: %s' %  sys.getdefaultencoding()
 
-    wp = WorkerPool(20)
+    # 初始化
+    if (os.path.exists('./output')==False):
+        os.mkdir('./output')
+    logfile = './output/amap_poi.log'
+    dbfile = './output/amap_poi.db'
 
-    for n in range(0, 100):
-        for i in range(1, 45):
-            #test(i)
-            wp.add_job(test, i)
+    # 初始化
+    conn = sqlite3.connect(dbfile, check_same_thread = False)
+    InitLOG(logfile)
+    InitDB(conn)
+    spider = Spider(conn)
+    
+    # 读取所有的types
+    text = open('types.txt', 'r').read()
+    text = text.strip()
+    text.replace('\r', '')
+    typeslst = text.split('\n')
 
+
+
+    # 任务计划
+    tasks = []
+
+    # 循环所有类别 添加任务
+    wp = WorkerPool(MAX_THREADS)
+    for types in typeslst:
+        params = {
+            'keywords': '',
+            'types': types,
+            'city': u'柳州',
+            'children': 1,
+            'offset': 1,
+            'page': 1,
+            'extensions': 'base'
+        } 
+        wp.add_job(spider.AddTasks, params, tasks)
+        break
+    wp.wait_for_complete()
+    # 保存任务列表
+    
+    
+    # 开始任务
+    tasks_count = len(tasks)
+    print 'task count:', tasks_count
+    wp = WorkerPool(MAX_THREADS)
+    for task in tasks:
+        wp.add_job(spider.TaskThread, task)
+    #
     wp.wait_for_complete()
 
-    '''
-    cookie = open('./cookie.txt', 'r').read()
     
-    url = 'http://lbs.amap.com/dev/api?keywords=银行&types=160000&city=柳州&children=1&offset=20&page=2&extensions=all'
-    headers = {
-        #'Accept': 'application/json, text/javascript, */*; q=0.01',
-        #'Origin': 'http://lbs.amap.com',
-        #'Referer': 'http://lbs.amap.com/api/webservice/guide/api/search/',
-        'X-Requested-With': 'XMLHttpRequest',
-        #'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-        #'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/61.0.3163.100 Safari/537.36',
-        #'Accept-Encoding': 'gzip, deflate',
-        #'Accept-Language': 'zh-CN,zh;q=0.8',
-        #'Cookie': cookie
-    }
-
-    data = {
-        'type': 'place/text',
-        'version': 'v3'
-    }
-
+    conn.commit()
+    conn.close()
+    logging.shutdown()
+    print 'OK.'
     
-    print cookie
-    r = requests.post(url, headers=headers, data=data)
-    data = json.loads(r.content)
-    print data['count'], data['info']
-    '''
-
-
-
 
 
 
