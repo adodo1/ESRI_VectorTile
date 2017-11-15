@@ -128,26 +128,31 @@ class Spider:
         if (int(data['status']) != 1): return 0
         else: return int(data['count'])
 
-    def GetCoorsList(self, minlat, maxlat, minlng, maxlng, step):
-        # 坐标分组
+    def GetCoorsList(self, minlng, minlat, maxlng, maxlat):
+        # 坐标分组 1块分4块
+        midlat = (maxlat + minlat) / 2.0
+        midlng = (maxlng + minlng) / 2.0
         coors = []
-        for n in range(0, int(math.ceil((maxlat - minlat) / step))):
-            for m in range(0, int(math.ceil((maxlng - minlng) / step))):
-                #
-                lat1 = minlat + step * n
-                lat2 = minlat + step * (n + 1)
-                lng1 = minlng + step * m
-                lng2 = minlng + step * (m + 1)
-                coorstr = '%.6f,%.6f|%.6f,%.6f' % (lng1, lat1, lng2, lat2)
-                coors.append(coorstr)
+        #coorstr = '%.6f,%.6f|%.6f,%.6f' % (minlng, minlat, midlng, midlat)
+        #coors.append(coorstr)
+        #coorstr = '%.6f,%.6f|%.6f,%.6f' % (minlng, midlat, midlng, maxlat)
+        #coors.append(coorstr)
+        #coorstr = '%.6f,%.6f|%.6f,%.6f' % (midlng, minlat, maxlng, midlat)
+        #coors.append(coorstr)
+        #coorstr = '%.6f,%.6f|%.6f,%.6f' % (midlng, midlat, maxlng, maxlat)
+        #coors.append(coorstr)
+        coors.append([minlng, minlat, midlng, midlat])
+        coors.append([minlng, midlat, midlng, maxlat])
+        coors.append([midlng, minlat, maxlng, midlat])
+        coors.append([midlng, midlat, maxlng, maxlat])
         return coors
 
-    def AddTasks(self, params, tasks, regroup):
+    def AddTasks(self, params, tasks, collection):
         # 添加任务到全局的任务列表
         # 查询总数
         offset = 20
         total = self.GetTotal(params)
-        logging.info('types: %s  total: %d' % (params['types'], total))
+        logging.info('types: %s coors: %s  total: %d -- %d' % (params['types'], params['polygon'], total, len(collection)))
         if (total == 0): return
         # 放入任务列表中
         mutex.acquire()
@@ -176,10 +181,14 @@ class Spider:
                 tasks.append(task)
         else:
             # 需要重新分组
-            if (regroup != None):
-                regroup.append(params['types'])
-            else:
-                logging.error('types %s max than 800 at %s' % (params['types'], params['polygon']))
+            coors = params['polygon'].split('|')
+            minlng = float(coors[0].split(',')[0])
+            minlat = float(coors[0].split(',')[1])
+            maxlng = float(coors[1].split(',')[0])
+            maxlat = float(coors[1].split(',')[1])
+            coors = self.GetCoorsList(minlng, minlat, maxlng, maxlat)
+            for coor in coors:
+                collection.append([params['types'], coor])
                 
         mutex.release()
 
@@ -289,56 +298,47 @@ if __name__=='__main__':
     typeslst = text.split('\n')
 
 
-    #coors = spider.GetCoorsList(bottom_lat, top_lat, left_lng, right_lng, step)
+    tasks = []          # 所有任务
+    regroup = []        # 重新分组 如果数组不为空就一直循环下去
 
-
-    # 任务计划
-    tasks = []
-    regroup = []
-    # 循环所有类别 添加任务
-    wp = WorkerPool(MAX_THREADS)
     for types in typeslst:
-        params = {
-            'polygon': '%.6f,%.6f|%.6f,%.6f' % (left_lng, bottom_lat, right_lng, top_lat),
-            'keywords': '',
-            'types': types,
-            'offset': 1,
-            'page': 1,
-            'extensions': 'base'
-        }
-        wp.add_job(spider.AddTasks, params, tasks, regroup)
-    wp.wait_for_complete()
+        regroup.append([types, [left_lng, bottom_lat, right_lng, top_lat]])
 
-    print '================================================'
+    while True:
+        print '########################################################'
+        print '########################################################'
+        print '########################################################'
+        print '########################################################'
+        if (len(regroup) == 0): break
+        # 循环所有类别 添加任务
+        collection = []     # 用来收集新任务
+        wp = WorkerPool(MAX_THREADS)
 
-    # 处理重新分组
-    wp = WorkerPool(MAX_THREADS)
-    coors = spider.GetCoorsList(bottom_lat, top_lat, left_lng, right_lng, step)
-    tasks_count = len(coors) * len(regroup)
-    
-    for types in regroup:
-        for coor in coors:
+        for group in regroup:
+            types = group[0]
+            coors = tuple(group[1])
             params = {
-                'polygon': coor,
+                'polygon': '%.6f,%.6f|%.6f,%.6f' % coors,
                 'keywords': '',
                 'types': types,
                 'offset': 1,
                 'page': 1,
                 'extensions': 'base'
             }
-            wp.add_job(spider.AddTasks, params, tasks, None)
-    wp.wait_for_complete()
-    
+            wp.add_job(spider.AddTasks, params, tasks, collection)
+        wp.wait_for_complete()
+        # 收集到的新组重新循环
+        regroup = collection
+
+    print '================================================'
     
     # 保存任务列表
     f = open('tasks.json', 'w')
     f.write(json.dumps(tasks))
     f.close()
 
-        
-
-    '''
     # 开始任务
+    success_num = 0
     tasks_count = len(tasks)
     print 'task count:', tasks_count
     wp = WorkerPool(MAX_THREADS)
@@ -347,7 +347,7 @@ if __name__=='__main__':
         wp.add_job(spider.TaskThread, params)
     #
     wp.wait_for_complete()
-    '''
+    
     
     conn.commit()
     conn.close()

@@ -9,7 +9,7 @@ def GetUids(data):
     uids = []
     if (int(data['status'])!=1): return uids
     for poi in data['pois']:
-        uid = poi['id']
+        uid = poi['id'] + poi['cityname']
         uids.append(uid)
     return uids
 
@@ -20,7 +20,7 @@ if __name__=='__main__':
 
     # 高德地图POI解码
     # 初始化
-    dbfile = './output/amap_poi.db'
+    dbfile = './output/amap_poi_polygon.db'
     conn = sqlite3.connect(dbfile, check_same_thread = False)
 
     result = []
