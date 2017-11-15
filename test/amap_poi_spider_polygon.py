@@ -75,11 +75,10 @@ class WorkerPool:
 
 class Spider:
     # 高德POI爬虫
-    def __init__(self, conn, workpool):
+    def __init__(self, conn):
         # conn 数据库连接
         self.POI_URL = 'http://lbs.amap.com/dev/api'    # 获取POI列表
         self._conn = conn               # 数据库连接
-        self._workpool = workpool       # 线程池
 
     def GetData(self, params):
         # 获取数据
@@ -143,7 +142,7 @@ class Spider:
                 coors.append(coorstr)
         return coors
 
-    def AddTasks(self, params, tasks, bottom_lat, top_lat, left_lng, right_lng, step):
+    def AddTasks(self, params, tasks, regroup):
         # 添加任务到全局的任务列表
         # 查询总数
         offset = 20
@@ -152,6 +151,13 @@ class Spider:
         if (total == 0): return
         # 放入任务列表中
         mutex.acquire()
+        global success_num
+        global tasks_count
+
+        success_num += 1
+        if (success_num % 100 == 0):
+            logging.info('>>>>>>>>>>>>> %d / %d' % (success_num, tasks_count))
+            
         # 2种情
         # 1. 总数小于 800 直接加入任务组
         # 2. 总数大于等于 800 按照范围进行重新分组
@@ -168,23 +174,15 @@ class Spider:
                 }
                 # 加入列表
                 tasks.append(task)
-            mutex.release()
-            return
-        
         else:
-            # 重新按照区域分组
-            coors = self.GetCoorsList(bottom_lat, top_lat, left_lng, right_lng, step)
-            logging.info('regroup[%d]: %s' % (len(coors), params['polygon']))
-            for coor in coors:
-                subparams = {
-                    'polygon': coor,
-                    'keywords': params['keywords'],
-                    'types': params['types'],
-                    'offset': 1,
-                    'page': 1,
-                    'extensions': 'base'
-                }
-                self._workpool.add_job(self.AddTasks, subparams, tasks, bottom_lat, top_lat, left_lng, right_lng, step)
+            # 需要重新分组
+            if (regroup != None):
+                regroup.append(params['types'])
+            else:
+                logging.error('types %s max than 800 at %s' % (params['types'], params['polygon']))
+                
+        mutex.release()
+
 
     def TaskThread(self, params):
         # 任务线程
@@ -275,15 +273,14 @@ if __name__=='__main__':
     bottom_lat = 24.03267
     right_lng = 109.95529
     # 步长
-    step = 0.015
+    step = 0.05
 
     
     # 初始化
-    wp = WorkerPool(MAX_THREADS)
     conn = sqlite3.connect(dbfile, check_same_thread = False)
     InitLOG(logfile)
     InitDB(conn)
-    spider = Spider(conn, wp)
+    spider = Spider(conn)
     
     # 读取所有的types
     text = open('types.txt', 'r').read()
@@ -297,8 +294,9 @@ if __name__=='__main__':
 
     # 任务计划
     tasks = []
-
+    regroup = []
     # 循环所有类别 添加任务
+    wp = WorkerPool(MAX_THREADS)
     for types in typeslst:
         params = {
             'polygon': '%.6f,%.6f|%.6f,%.6f' % (left_lng, bottom_lat, right_lng, top_lat),
@@ -308,8 +306,30 @@ if __name__=='__main__':
             'page': 1,
             'extensions': 'base'
         }
-        wp.add_job(spider.AddTasks, params, tasks, bottom_lat, top_lat, left_lng, right_lng, step)
+        wp.add_job(spider.AddTasks, params, tasks, regroup)
     wp.wait_for_complete()
+
+    print '================================================'
+
+    # 处理重新分组
+    wp = WorkerPool(MAX_THREADS)
+    coors = spider.GetCoorsList(bottom_lat, top_lat, left_lng, right_lng, step)
+    tasks_count = len(coors) * len(regroup)
+    
+    for types in regroup:
+        for coor in coors:
+            params = {
+                'polygon': coor,
+                'keywords': '',
+                'types': types,
+                'offset': 1,
+                'page': 1,
+                'extensions': 'base'
+            }
+            wp.add_job(spider.AddTasks, params, tasks, None)
+    wp.wait_for_complete()
+    
+    
     # 保存任务列表
     f = open('tasks.json', 'w')
     f.write(json.dumps(tasks))
