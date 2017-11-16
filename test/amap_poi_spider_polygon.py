@@ -195,11 +195,15 @@ class Spider:
 
     def TaskThread(self, params):
         # 任务线程
+        if (network_err): return
         conn = self._conn
 
         # 查询数据库里是否有记录
         total = 0
         data = self.GetJson(params)
+        if (int(data['status']) == 1111):
+            network_err = True
+            
         if (int(data['status']) != 1): total = 0
         else: total = int(data['count'])
 
@@ -264,6 +268,7 @@ def InitDB(conn):
 
 success_num = 0
 tasks_count = 0
+network_err = False     # 网络故障
 
 if __name__=='__main__':
     print '[==DoDo==]'
@@ -277,12 +282,10 @@ if __name__=='__main__':
     dbfile = './output/amap_poi_polygon.db'
 
     # 经纬度范围
-    top_lat = 24.76429
-    left_lng = 109.10797
-    bottom_lat = 24.03267
-    right_lng = 109.95529
-    # 步长
-    step = 0.05
+    top_lat = 23.952132
+    left_lng = 112.938713
+    bottom_lat = 22.575293
+    right_lng = 114.073587
 
     
     # 初始化
@@ -301,8 +304,20 @@ if __name__=='__main__':
     tasks = []          # 所有任务
     regroup = []        # 重新分组 如果数组不为空就一直循环下去
 
-    for types in typeslst:
-        regroup.append([types, [left_lng, bottom_lat, right_lng, top_lat]])
+    # 判断是否存在任务文件 如果存在从中断的任务开始执行
+    if (os.path.exists('_tasks.json')):
+        f = open('_tisks.json', 'r')
+        tasks = json.loads(f.read())
+        f.close()
+    if (os.path.exists('_regroup.json')):
+        f = open('_regroup.json', 'r')
+        regroup = json.loads(f.read())
+        f.close()
+        
+    # 如果没有中断的任务
+    if (len(regroup) == 0):
+        for types in typeslst:
+            regroup.append([types, [left_lng, bottom_lat, right_lng, top_lat]])
 
     while True:
         print '########################################################'
@@ -327,10 +342,28 @@ if __name__=='__main__':
             }
             wp.add_job(spider.AddTasks, params, tasks, collection)
         wp.wait_for_complete()
+        # 如果发生网络故障跳出
+        if (network_err): break
         # 收集到的新组重新循环
         regroup = collection
+        
 
-    print '================================================'
+    # 网络故障处理
+    # 如果请求被高德和谐 会产生1111错误
+    # 保存当前已搜集的任务列表
+    # 保存当前未完成的重分组列表
+    if (network_err):
+        f = open('_tasks.json', 'w')
+        f.write(json.dumps(tasks))
+        f.close()
+        f = open('_regroup.json', 'w')
+        f.write(json.dumps(regroup))
+        f.close()
+        # 抛出异常中断任务
+        raise Exception()
+        
+    
+    print '==============================================='
     
     # 保存任务列表
     f = open('tasks.json', 'w')
