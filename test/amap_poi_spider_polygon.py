@@ -149,9 +149,19 @@ class Spider:
 
     def AddTasks(self, params, tasks, collection):
         # 添加任务到全局的任务列表
+        global network_err
+        if (network_err): return
+        
         # 查询总数
         offset = 20
-        total = self.GetTotal(params)
+        data = self.GetJson(params)
+        # 高德地图网络和谐代码
+        if (int(data['status']) == 1111):
+            network_err = True
+            return
+        if (int(data['status']) != 1): total = 0
+        else: total = int(data['count'])
+            
         logging.info('types: %s coors: %s  total: %d -- %d' % (params['types'], params['polygon'], total, len(collection)))
         if (total == 0): return
         # 放入任务列表中
@@ -195,15 +205,16 @@ class Spider:
 
     def TaskThread(self, params):
         # 任务线程
+        global network_err
         if (network_err): return
+        # 
         conn = self._conn
-
         # 查询数据库里是否有记录
         total = 0
         data = self.GetJson(params)
         if (int(data['status']) == 1111):
             network_err = True
-            
+            return
         if (int(data['status']) != 1): total = 0
         else: total = int(data['count'])
 
