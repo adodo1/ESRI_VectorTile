@@ -172,10 +172,17 @@ class Spider:
         success_num += 1
         if (success_num % 100 == 0):
             logging.info('>>>>>>>>>>>>> %d / %d' % (success_num, tasks_count))
-            
-        # 2种情
+
+        # 解析出坐标点
+        coors = params['polygon'].split('|')
+        minlng = float(coors[0].split(',')[0])
+        minlat = float(coors[0].split(',')[1])
+        maxlng = float(coors[1].split(',')[0])
+        maxlat = float(coors[1].split(',')[1])
+        # 3种情
         # 1. 总数小于 800 直接加入任务组
         # 2. 总数大于等于 800 按照范围进行重新分组
+        # 3. 当范围已经缩小到最小 但是结果还是大于800个 不再进行重新分组
         if (total < 800):
             # 直接加入任务组
             for n in range(0, int(math.ceil(total // offset))):
@@ -189,13 +196,22 @@ class Spider:
                 }
                 # 加入列表
                 tasks.append(task)
+        elif (maxlng - minlng < 0.000001) and (maxlat - minlat < 0.000001):
+            # 因为高德限制小数点后6位 如果在这么小的范围里还是多余800个就不再分组
+            logging.error('types: %s coors: %s  total: %d more than 800 -- %d' % (params['types'], params['polygon'], total, len(collection)))
+            for n in range(0, int(math.ceil(total // offset))):
+                task = {
+                    'polygon': params['polygon'],
+                    'keywords': params['keywords'],
+                    'types': params['types'],
+                    'offset': offset,
+                    'page': n+1,
+                    'extensions': 'all'
+                }
+                # 加入列表
+                tasks.append(task)
         else:
             # 需要重新分组
-            coors = params['polygon'].split('|')
-            minlng = float(coors[0].split(',')[0])
-            minlat = float(coors[0].split(',')[1])
-            maxlng = float(coors[1].split(',')[0])
-            maxlat = float(coors[1].split(',')[1])
             coors = self.GetCoorsList(minlng, minlat, maxlng, maxlat)
             for coor in coors:
                 collection.append([params['types'], coor])
@@ -312,12 +328,13 @@ if __name__=='__main__':
     typeslst = text.split('\n')
 
 
+
     tasks = []          # 所有任务
     regroup = []        # 重新分组 如果数组不为空就一直循环下去
 
     # 判断是否存在任务文件 如果存在从中断的任务开始执行
     if (os.path.exists('_tasks.json')):
-        f = open('_tisks.json', 'r')
+        f = open('_tasks.json', 'r')
         tasks = json.loads(f.read())
         f.close()
     if (os.path.exists('_regroup.json')):
@@ -329,6 +346,8 @@ if __name__=='__main__':
     if (len(regroup) == 0):
         for types in typeslst:
             regroup.append([types, [left_lng, bottom_lat, right_lng, top_lat]])
+
+    hasdo = set()
 
     while True:
         print '########################################################'
@@ -343,6 +362,11 @@ if __name__=='__main__':
         for group in regroup:
             types = group[0]
             coors = tuple(group[1])
+            # 程序还有缺陷 已经请求过的数据还要重复请求 偷个懒
+            uuids = '%s:%s' % (types, coors)
+            if (uuids in hasdo): continue
+            else: hasdo.add(uuids)
+            #
             params = {
                 'polygon': '%.6f,%.6f|%.6f,%.6f' % coors,
                 'keywords': '',
@@ -357,7 +381,7 @@ if __name__=='__main__':
         if (network_err): break
         # 收集到的新组重新循环
         regroup = collection
-        
+
 
     # 网络故障处理
     # 如果请求被高德和谐 会产生1111错误
