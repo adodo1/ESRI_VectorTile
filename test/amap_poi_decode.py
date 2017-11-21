@@ -169,10 +169,17 @@ if __name__=='__main__':
     row = cursor.fetchone()
     while row != None:
         num += 1
-        if (num % 100==0): print num
+        if (num % 1000==0): print num
         
         context = row[0]
-        data = json.loads(context)
+        try:
+            data = json.loads(context)
+        except Exception, ex:
+            f = open('_error.txt', 'a')
+            f.write(context)
+            f.write('\n')
+            f.close()
+            continue
         udatas = GetData(data)
         # 保存
         for udata in udatas:
